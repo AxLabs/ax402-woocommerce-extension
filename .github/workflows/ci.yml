@@ -25,7 +25,6 @@ jobs:
 
   live-cp:
     runs-on: self-hosted
-    if: ${{ secrets.AX402_API_KEY != '' }}
     needs: unit
     steps:
       - uses: actions/checkout@v4
@@ -35,5 +34,9 @@ jobs:
           AX402_BASE_URL: ${{ vars.AX402_BASE_URL }}
           AX402_PAY_TO_ADDRESS: ${{ secrets.AX402_PAY_TO_ADDRESS }}
         run: |
+          if [ -z "${AX402_API_KEY:-}" ]; then
+            echo "Skipping live-cp: AX402_API_KEY secret is not set."
+            exit 0
+          fi
           export AX402_BASE_URL="${AX402_BASE_URL:-https://api.ax402.io}"
           bash bin/run-phpunit.sh --testsuite Live
