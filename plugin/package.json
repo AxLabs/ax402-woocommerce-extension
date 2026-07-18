@@ -1,0 +1,25 @@
+{
+  "name": "ax402-woocommerce",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Ax402 WooCommerce payment gateway frontend assets",
+  "scripts": {
+    "build": "wp-scripts build",
+    "start": "wp-scripts start",
+    "lint:js": "wp-scripts lint-js src",
+    "test:js": "vitest run --config ../vitest.config.mjs"
+  },
+  "dependencies": {
+    "@ax402/react-paywall": "^0.0.3",
+    "@ax402/sdk": "^0.0.3",
+    "@wordpress/element": "^6.0.0",
+    "@wordpress/html-entities": "^4.0.0",
+    "@x402/evm": "^2.0.0",
+    "@x402/fetch": "^2.0.0",
+    "viem": "^2.0.0"
+  },
+  "devDependencies": {
+    "@wordpress/scripts": "^30.0.0",
+    "vitest": "^3.0.0"
+  }
+}

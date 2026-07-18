@@ -1,0 +1,12 @@
+node_modules/
+plugin/node_modules/
+plugin/vendor/
+plugin/.e2e-config.json
+.env
+plugin/.seed-gateway.json
+.phpunit.cache/
+coverage/
+playwright-report/
+test-results/
+.DS_Store
+*.log

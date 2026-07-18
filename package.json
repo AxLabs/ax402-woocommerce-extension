@@ -1,0 +1,31 @@
+{
+  "name": "ax402-woocommerce-extension",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Monorepo for the Ax402 WooCommerce extension",
+  "scripts": {
+    "env:start": "wp-env start",
+    "env:stop": "wp-env stop",
+    "env:destroy": "wp-env destroy",
+    "env:seed": "bash bin/seed-wp-env.sh",
+    "build": "npm --prefix plugin run build",
+    "lint:js": "npm --prefix plugin run lint:js",
+    "test:unit": "bash bin/run-phpunit.sh --testsuite Unit",
+    "test:integration": "bash bin/run-phpunit.sh --testsuite Integration",
+    "test:live-cp": "bash bin/run-phpunit.sh --testsuite Live",
+    "test:js": "vitest run --config vitest.config.mjs",
+    "test:e2e-ui": "playwright test -c tests/e2e/playwright.config.ts",
+    "test:e2e-pay": "node tests/e2e/programmatic-pay.mjs",
+    "package": "bash bin/package-plugin.sh",
+    "test": "npm run test:unit && npm run test:integration && npm run test:js"
+  },
+  "devDependencies": {
+    "@ax402/sdk": "^0.0.3",
+    "@playwright/test": "^1.51.0",
+    "@wordpress/env": "^10.0.0",
+    "vitest": "^3.2.7"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

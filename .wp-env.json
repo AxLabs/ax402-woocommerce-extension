@@ -1,0 +1,16 @@
+{
+  "core": null,
+  "phpVersion": "8.2",
+  "plugins": [
+    "https://downloads.wordpress.org/plugin/woocommerce.latest-stable.zip",
+    "./plugin"
+  ],
+  "config": {
+    "WP_DEBUG": true,
+    "SCRIPT_DEBUG": true,
+    "WOOCOMMERCE_CURRENCY": "USD"
+  },
+  "lifecycleScripts": {
+    "afterStart": "bash bin/seed-wp-env.sh"
+  }
+}

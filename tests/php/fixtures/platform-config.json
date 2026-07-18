@@ -1,0 +1,45 @@
+{
+  "platform_domain": "x.ax402.io",
+  "admin_host": "api.ax402.io",
+  "gateway_port": 8090,
+  "development_platform_domains": [
+    {
+      "domain": "dev.x.ax402.io",
+      "label": "Development",
+      "is_primary": true,
+      "enabled": true
+    }
+  ],
+  "payment_tokens": [
+    {
+      "id": "eip155:8453:0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+      "symbol": "USDC",
+      "name": "USD Coin",
+      "network": "eip155:8453",
+      "asset": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      "decimals": 6,
+      "schemes": ["exact", "batch-settlement"],
+      "extra": {
+        "assetTransferMethod": "eip3009",
+        "name": "USD Coin",
+        "version": "2"
+      },
+      "enabled": true
+    },
+    {
+      "id": "eip155:845320402:0x036cbd53842c5426634e7929541ec2318f3dcf7e",
+      "symbol": "USDC",
+      "name": "USD Coin",
+      "network": "eip155:845320402",
+      "asset": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+      "decimals": 6,
+      "schemes": ["exact"],
+      "extra": {
+        "assetTransferMethod": "eip3009",
+        "name": "USDC",
+        "version": "2"
+      },
+      "enabled": true
+    }
+  ]
+}

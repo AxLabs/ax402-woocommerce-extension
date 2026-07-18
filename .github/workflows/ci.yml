@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - name: Install root + plugin JS deps
+        run: |
+          npm ci || npm install
+          npm --prefix plugin ci || npm --prefix plugin install
+      - name: JS unit tests
+        run: npm run test:js
+      - name: PHP unit tests
+        run: bash bin/run-phpunit.sh --testsuite Unit
+
+  live-cp:
+    runs-on: ubuntu-latest
+    if: ${{ secrets.AX402_API_KEY != '' }}
+    needs: unit
+    steps:
+      - uses: actions/checkout@v4
+      - name: Live control-plane smoke
+        env:
+          AX402_API_KEY: ${{ secrets.AX402_API_KEY }}
+          AX402_BASE_URL: ${{ vars.AX402_BASE_URL }}
+          AX402_PAY_TO_ADDRESS: ${{ secrets.AX402_PAY_TO_ADDRESS }}
+        run: |
+          export AX402_BASE_URL="${AX402_BASE_URL:-https://api.ax402.io}"
+          bash bin/run-phpunit.sh --testsuite Live
