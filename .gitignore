@@ -1,12 +1,30 @@
-node_modules/
-plugin/node_modules/
-plugin/vendor/
-plugin/.e2e-config.json
+# Dependencies
+**/node_modules/
+**/vendor/
+
+# Secrets / local runtime (never commit)
 .env
+.env.*
+!.env.example
+plugin/.e2e-config.json
 plugin/.seed-gateway.json
+
+# Test / build caches & reports
 .phpunit.cache/
 coverage/
 playwright-report/
 test-results/
-.DS_Store
 *.log
+*.map
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# wp-env local data (if present in workspace)
+.wp-env/

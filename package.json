@@ -8,6 +8,7 @@
     "env:stop": "wp-env stop",
     "env:destroy": "wp-env destroy",
     "env:seed": "bash bin/seed-wp-env.sh",
+    "env:e2e": "bash bin/prepare-e2e.sh",
     "build": "npm --prefix plugin run build",
     "lint:js": "npm --prefix plugin run lint:js",
     "test:unit": "bash bin/run-phpunit.sh --testsuite Unit",

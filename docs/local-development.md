@@ -79,7 +79,10 @@ Useful commands:
 npm run env:stop       # stop containers
 npm run env:destroy    # wipe volumes (full reset)
 npm run env:seed       # re-run seed anytime (safe / idempotent)
+npm run env:e2e        # seed + E2E readiness (+ tunnel sync if WP_BASE_URL set)
 ```
+
+For the full payment E2E path (ngrok, upstream, `test:e2e-pay`), see **[e2e.md](e2e.md)**.
 
 Rebuild JS after pay-page or blocks changes:
 
@@ -199,7 +202,7 @@ Response includes `payment_url` (Ax402 gateway). Pay with buyer SDK/CLI, then:
 GET /wp-json/ax402/v1/orders/{order_key}
 ```
 
-See [testing.md](testing.md) for `npm run test:e2e-pay`.
+See [e2e.md](e2e.md) for the ready-to-go E2E seed + `npm run test:e2e-pay`.
 
 ---
 

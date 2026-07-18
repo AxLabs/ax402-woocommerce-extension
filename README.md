@@ -20,9 +20,10 @@ This is a gateway extension — not a full storefront. Catalog, cart, customers,
 |---|---|
 | [**Context**](docs/context.md) | What the extension is / is not, concerns, currency model |
 | [**Local development**](docs/local-development.md) | Start wp-env, `.env`, seed products, tunnel, first payment |
+| [**E2E environment**](docs/e2e.md) | Ready-to-go seed + ngrok + programmatic / MetaMask pay |
 | [Architecture](docs/architecture.md) | Components, trust model, CORS |
 | [Merchant setup](docs/merchant-setup.md) | Production checklist + agent buy sketch |
-| [Testing](docs/testing.md) | Unit, live CP, E2E |
+| [Testing](docs/testing.md) | Unit, live CP, E2E commands |
 
 ## Quick start
 
@@ -38,7 +39,7 @@ npm --prefix plugin install
 npm run build
 
 npm run env:start   # WordPress + WooCommerce + plugin + auto-seed
-# or later: npm run env:seed
+npm run env:e2e     # re-seed + E2E readiness (set WP_BASE_URL after ngrok)
 ```
 
 | | |
@@ -48,6 +49,8 @@ npm run env:start   # WordPress + WooCommerce + plugin + auto-seed
 | Login | `admin` / `password` |
 
 Configure **WooCommerce → Settings → Payments → Ax402**. Orders appear under **WooCommerce → Orders**.
+
+Full E2E (tunnel + pay): [docs/e2e.md](docs/e2e.md).
 
 ### Demo catalog (seeded)
 
@@ -65,10 +68,10 @@ Configure **WooCommerce → Settings → Payments → Ax402**. Orders appear und
 ```bash
 npm test                 # PHP unit + integration + JS unit
 npm run test:live-cp     # needs AX402_API_KEY (+ PAY_TO for create/delete)
-npm run test:e2e-pay     # needs public WP_BASE_URL + buyer key
+npm run test:e2e-pay     # needs public WP_BASE_URL + buyer key (see docs/e2e.md)
 ```
 
-See [docs/testing.md](docs/testing.md).
+See [docs/testing.md](docs/testing.md) and [docs/e2e.md](docs/e2e.md).
 
 ## Repository layout
 

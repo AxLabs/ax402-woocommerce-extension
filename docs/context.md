@@ -76,6 +76,7 @@ Those belong to **WooCommerce** (and optional third-party plugins). Merchants ma
 ## Related docs
 
 - [Local development & seeding](local-development.md) — start wp-env, seed, tunnel, first payment
+- [E2E environment](e2e.md) — ready-to-go seed + ngrok + programmatic / MetaMask pay (`npm run env:e2e`)
 - [Architecture](architecture.md) — components and flows
 - [Merchant setup](merchant-setup.md) — production-oriented checklist
-- [Testing](testing.md) — unit, live control plane, E2E
+- [Testing](testing.md) — unit, live control plane, E2E commands
