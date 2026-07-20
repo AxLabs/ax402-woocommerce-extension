@@ -32,9 +32,23 @@ final class OrderPaymentMetaTest extends TestCase
         $accept = Ax402_WC_Platform_Tokens::build_accept($token, $atomic, 'exact');
         $path = Ax402_WC_Order_Payment::fulfill_path('wc_order_demo', 'aabbccdd');
 
+        $options = Ax402_WC_Platform_Tokens::build_settlement_options(
+            $platform,
+            [
+                (string) $token['id'],
+                'eip155:845320402:0xfde4c96c8593536e31f229ea8f37b2ada2699bb2',
+            ],
+            $amount,
+            'exact'
+        );
+        $accepts = array_map(static fn (array $o): array => $o['accept'], $options);
+
         $this->assertSame('22.500000', $amount);
         $this->assertSame('22500000', $atomic);
         $this->assertSame('22500000', $accept['amount']);
+        $this->assertCount(2, $accepts);
+        $this->assertSame('22500000', $accepts[0]['amount']);
+        $this->assertSame('22500000', $accepts[1]['amount']);
         $this->assertStringContainsString('/fulfill/wc_order_demo/aabbccdd', $path);
     }
 }

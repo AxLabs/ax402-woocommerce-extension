@@ -40,21 +40,49 @@ final class Ax402_WC_Pay_Page
     private function page_config(WC_Order $order, string $gateway_url): array
     {
         $settings = Ax402_WC_Settings::all();
-        $network = (string) $order->get_meta(Ax402_WC_Order_Payment::META_NETWORK);
-        if ($network === '') {
-            $network = Ax402_WC_Platform_Tokens::network_for_mode($settings['network_mode']);
+        $amount_usd = (string) $order->get_meta(Ax402_WC_Order_Payment::META_AMOUNT_USD);
+        if ($amount_usd === '') {
+            $amount_usd = (string) $order->get_meta(Ax402_WC_Order_Payment::META_AMOUNT_USDC);
+        }
+        if ($amount_usd === '') {
+            $amount_usd = Ax402_WC_Money::normalize_order_total($order->get_total());
         }
 
-        $amount = (string) $order->get_meta(Ax402_WC_Order_Payment::META_AMOUNT_USDC);
-        if ($amount === '') {
-            $amount = Ax402_WC_Money::normalize_order_total($order->get_total());
+        $options = Ax402_WC_Order_Payment::settlement_options_from_order($order);
+        if ($options === []) {
+            $network = (string) $order->get_meta(Ax402_WC_Order_Payment::META_NETWORK);
+            if ($network === '') {
+                $network = Ax402_WC_Platform_Tokens::network_for_mode($settings['network_mode']);
+            }
+            $asset = $network === Ax402_WC_Platform_Tokens::NETWORK_BASE_MAINNET
+                ? '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'
+                : '0x036CbD53842c5426634e7929541eC2318f3dCF7e';
+            $atomic = (string) $order->get_meta(Ax402_WC_Order_Payment::META_AMOUNT_ATOMIC);
+            $options = [[
+                'tokenId' => 'legacy-usdc',
+                'symbol' => 'USDC',
+                'name' => 'USD Coin',
+                'network' => $network,
+                'networkLabel' => Ax402_WC_Platform_Tokens::network_label($network),
+                'asset' => $asset,
+                'decimals' => 6,
+                'amount' => $amount_usd,
+                'amountAtomic' => $atomic !== '' ? $atomic : Ax402_WC_Money::usdc_to_atomic($amount_usd),
+                'rate' => '1',
+                'chainIdHex' => Ax402_WC_Platform_Tokens::chain_id_hex($network),
+                'rpcUrl' => Ax402_WC_Platform_Tokens::rpc_url_for_network($network),
+                'isNative' => false,
+            ]];
         }
 
-        $usdc_asset = $network === Ax402_WC_Platform_Tokens::NETWORK_BASE_MAINNET
-            ? '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'
-            : '0x036CbD53842c5426634e7929541eC2318f3dCF7e';
+        foreach ($options as &$option) {
+            $option['blockExplorerUrl'] = self::explorer_url((string) ($option['network'] ?? ''));
+        }
+        unset($option);
 
+        $primary = $options[0];
         $order_key = $order->get_order_key();
+        $rpc_by_network = Ax402_WC_Platform_Tokens::rpc_urls();
 
         return [
             // Browser paywall must use same-origin proxy to avoid gateway CORS.
@@ -62,17 +90,27 @@ final class Ax402_WC_Pay_Page
             'directGatewayUrl' => $gateway_url,
             'orderId' => $order->get_id(),
             'orderKey' => $order_key,
-            'amountUsdc' => $amount,
-            'network' => $network,
-            'allowedAssets' => $usdc_asset,
+            'amountUsd' => $amount_usd,
+            'amountUsdc' => $amount_usd,
+            'network' => (string) ($primary['network'] ?? ''),
+            'allowedAssets' => (string) ($primary['asset'] ?? ''),
             'statusUrl' => rest_url('ax402/v1/orders/' . $order_key),
             'thankYouUrl' => $order->get_checkout_order_received_url(),
-            'preferredNetworks' => $network,
-            'rpcUrl' => $settings['network_mode'] === 'mainnet'
-                ? 'https://mainnet.base.org'
-                : 'https://sepolia.base.org',
+            'preferredNetworks' => (string) ($primary['network'] ?? ''),
+            'rpcUrl' => (string) ($primary['rpcUrl'] ?? ''),
+            'rpcByNetwork' => $rpc_by_network,
+            'settlementOptions' => $options,
             'shopUrl' => wc_get_page_permalink('shop') ?: home_url('/'),
         ];
+    }
+
+    private static function explorer_url(string $network): string
+    {
+        return match ($network) {
+            Ax402_WC_Platform_Tokens::NETWORK_BASE_MAINNET => 'https://basescan.org',
+            Ax402_WC_Platform_Tokens::NETWORK_SEPOLIA => 'https://sepolia.basescan.org',
+            default => '',
+        };
     }
 
     public function maybe_render(): void
@@ -165,6 +203,8 @@ final class Ax402_WC_Pay_Page
             --ax402-accent: #7cffb2;
             --ax402-card: rgba(255,255,255,0.04);
             --ax402-border: rgba(255,255,255,0.10);
+            --ax402-warn: #ffd27a;
+            --ax402-error: #ff8f8f;
         }
         body.ax402-pay-body {
             margin: 0;
@@ -206,17 +246,80 @@ final class Ax402_WC_Pay_Page
             padding: 1.25rem;
             backdrop-filter: blur(8px);
         }
-        .ax402-pay-meta {
-            display: flex;
-            justify-content: space-between;
-            gap: 1rem;
+        .ax402-order-summary {
+            display: grid;
+            gap: 0.75rem;
             margin-bottom: 1rem;
             padding-bottom: 1rem;
             border-bottom: 1px solid var(--ax402-border);
+        }
+        .ax402-order-summary > div {
+            display: flex;
+            justify-content: space-between;
+            gap: 1rem;
             font-size: 0.95rem;
         }
-        .ax402-pay-meta strong { color: var(--ax402-text); }
-        .ax402-pay-meta span { color: var(--ax402-muted); }
+        .ax402-order-summary span { color: var(--ax402-muted); }
+        .ax402-order-summary strong { color: var(--ax402-text); }
+        .ax402-settle { margin: 0 0 1rem; }
+        .ax402-settle-label {
+            margin: 0 0 0.5rem;
+            color: var(--ax402-muted);
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+        .ax402-settle-list {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+            display: grid;
+            gap: 0.5rem;
+        }
+        .ax402-settle-option {
+            width: 100%;
+            text-align: left;
+            border: 1px solid var(--ax402-border);
+            background: rgba(0,0,0,0.18);
+            color: var(--ax402-text);
+            border-radius: 12px;
+            padding: 0.7rem 0.85rem;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            gap: 0.2rem;
+        }
+        .ax402-settle-option.is-active {
+            border-color: var(--ax402-accent);
+            box-shadow: 0 0 0 1px rgba(124,255,178,0.35);
+        }
+        .ax402-settle-symbol { font-weight: 700; }
+        .ax402-settle-meta { color: var(--ax402-muted); font-size: 0.88rem; }
+        .ax402-banner {
+            border-radius: 12px;
+            padding: 0.85rem 0.95rem;
+            margin: 0 0 0.85rem;
+            border: 1px solid var(--ax402-border);
+        }
+        .ax402-banner p { margin: 0 0 0.65rem; line-height: 1.4; }
+        .ax402-banner-warn { background: rgba(255,210,122,0.08); color: var(--ax402-warn); }
+        .ax402-banner-error { background: rgba(255,143,143,0.08); color: var(--ax402-error); }
+        .ax402-banner-btn {
+            border: 0;
+            border-radius: 10px;
+            padding: 0.55rem 0.9rem;
+            background: var(--ax402-accent);
+            color: #061018;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .ax402-banner-btn:disabled { opacity: 0.6; cursor: wait; }
+        .ax402-ready-error { color: var(--ax402-error); font-size: 0.9rem; }
+        .ax402-pay-gate.is-blocked {
+            opacity: 0.45;
+            pointer-events: none;
+            filter: grayscale(0.2);
+        }
         #ax402-pay-root { min-height: 220px; }
         .ax402-pay-help {
             margin-top: 1.25rem;
@@ -232,25 +335,15 @@ final class Ax402_WC_Pay_Page
         <p class="ax402-pay-brand">Ax402</p>
         <h1><?php echo esc_html__('Pay securely with your wallet', 'ax402-woocommerce'); ?></h1>
         <p class="ax402-pay-lead">
-            <?php echo esc_html__('Connect MetaMask (or another wallet), confirm the USDC payment, and we will finalize your order automatically.', 'ax402-woocommerce'); ?>
+            <?php echo esc_html__('Choose a settlement token, connect your wallet, and confirm the payment. We finalize the order automatically.', 'ax402-woocommerce'); ?>
         </p>
         <section class="ax402-pay-card">
-            <div class="ax402-pay-meta">
-                <div>
-                    <span><?php echo esc_html__('Order', 'ax402-woocommerce'); ?></span><br />
-                    <strong>#<?php echo esc_html((string) $order->get_id()); ?></strong>
-                </div>
-                <div style="text-align:right">
-                    <span><?php echo esc_html__('Amount', 'ax402-woocommerce'); ?></span><br />
-                    <strong><?php echo esc_html($config['amountUsdc']); ?> USDC</strong>
-                </div>
-            </div>
             <div id="ax402-pay-root">
                 <p class="ax402-pay-lead"><?php echo esc_html__('Loading payment…', 'ax402-woocommerce'); ?></p>
             </div>
         </section>
         <p class="ax402-pay-help">
-            <?php echo esc_html__('Use the Base network in your wallet. Need to leave?', 'ax402-woocommerce'); ?>
+            <?php echo esc_html__('Use the network shown for your selected token. Need to leave?', 'ax402-woocommerce'); ?>
             <a href="<?php echo esc_url((string) $config['shopUrl']); ?>">
                 <?php echo esc_html__('Return to shop', 'ax402-woocommerce'); ?>
             </a>

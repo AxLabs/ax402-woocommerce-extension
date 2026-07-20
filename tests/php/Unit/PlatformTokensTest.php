@@ -73,4 +73,40 @@ final class PlatformTokensTest extends TestCase
             $url
         );
     }
+
+    public function test_build_settlement_options_skips_unpriced_tokens(): void
+    {
+        $ids = [
+            'eip155:845320402:0x036cbd53842c5426634e7929541ec2318f3dcf7e',
+            'eip155:845320402:0xfde4c96c8593536e31f229ea8f37b2ada2699bb2',
+            'eip155:8453:xgas-stub',
+        ];
+        $options = Ax402_WC_Platform_Tokens::build_settlement_options(
+            $this->platform,
+            $ids,
+            '22.500000',
+            'exact'
+        );
+
+        $this->assertCount(2, $options);
+        $this->assertSame('USDC', $options[0]['symbol']);
+        $this->assertSame('USDT', $options[1]['symbol']);
+        $this->assertSame('22500000', $options[0]['amount_atomic']);
+        $this->assertSame('22500000', $options[1]['amount_atomic']);
+        $this->assertSame('22500000', $options[0]['accept']['amount']);
+    }
+
+    public function test_default_enabled_token_ids_sepolia_usdc(): void
+    {
+        $ids = Ax402_WC_Platform_Tokens::default_enabled_token_ids($this->platform, 'sepolia');
+        $this->assertSame(
+            ['eip155:845320402:0x036cbd53842c5426634e7929541ec2318f3dcf7e'],
+            $ids
+        );
+    }
+
+    public function test_chain_id_hex(): void
+    {
+        $this->assertSame('0x2105', Ax402_WC_Platform_Tokens::chain_id_hex('eip155:8453'));
+    }
 }

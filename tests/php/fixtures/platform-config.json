@@ -40,6 +40,35 @@
         "version": "2"
       },
       "enabled": true
+    },
+    {
+      "id": "eip155:845320402:0xfde4c96c8593536e31f229ea8f37b2ada2699bb2",
+      "symbol": "USDT",
+      "name": "Tether USD",
+      "network": "eip155:845320402",
+      "asset": "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2",
+      "decimals": 6,
+      "schemes": ["exact"],
+      "extra": {
+        "assetTransferMethod": "eip3009",
+        "name": "USDT",
+        "version": "2"
+      },
+      "enabled": true
+    },
+    {
+      "id": "eip155:8453:xgas-stub",
+      "symbol": "xGAS",
+      "name": "xGAS",
+      "network": "eip155:8453",
+      "asset": "0x1111111111111111111111111111111111111111",
+      "decimals": 18,
+      "schemes": ["exact"],
+      "extra": {
+        "name": "xGAS",
+        "version": "2"
+      },
+      "enabled": true
     }
   ]
 }

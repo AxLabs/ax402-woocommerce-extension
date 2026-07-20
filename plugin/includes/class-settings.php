@@ -19,7 +19,8 @@ final class Ax402_WC_Settings
      *   scheme:string,
      *   api_id:string,
      *   gateway_host:string,
-     *   api_slug:string
+     *   api_slug:string,
+     *   enabled_token_ids:list<string>
      * }
      */
     public static function all(): array
@@ -33,6 +34,7 @@ final class Ax402_WC_Settings
             'api_id' => '',
             'gateway_host' => '',
             'api_slug' => '',
+            'enabled_token_ids' => [],
         ];
 
         $stored = get_option(self::OPTION_KEY, []);
@@ -51,6 +53,15 @@ final class Ax402_WC_Settings
 
         unset($merged['api_key_enc']);
 
+        $token_ids = $merged['enabled_token_ids'] ?? [];
+        if (!is_array($token_ids)) {
+            $token_ids = [];
+        }
+        $token_ids = array_values(array_filter(array_map(
+            static fn ($id): string => sanitize_text_field((string) $id),
+            $token_ids
+        )));
+
         return [
             'base_url' => (string) $merged['base_url'],
             'api_key' => (string) $merged['api_key'],
@@ -62,7 +73,32 @@ final class Ax402_WC_Settings
             'api_id' => (string) $merged['api_id'],
             'gateway_host' => (string) $merged['gateway_host'],
             'api_slug' => (string) $merged['api_slug'],
+            'enabled_token_ids' => $token_ids,
         ];
+    }
+
+    /**
+     * Resolved merchant token ids (configured selection or USDC default seed).
+     *
+     * @return list<string>
+     */
+    public static function enabled_token_ids(?array $platform = null): array
+    {
+        $settings = self::all();
+        $ids = $settings['enabled_token_ids'];
+        if ($ids !== []) {
+            return $ids;
+        }
+
+        $platform ??= Ax402_WC_Platform_Config_Store::platform_or_sync();
+        if ($platform === []) {
+            return [];
+        }
+
+        return Ax402_WC_Platform_Tokens::default_enabled_token_ids(
+            $platform,
+            $settings['network_mode']
+        );
     }
 
     /**
@@ -90,6 +126,9 @@ final class Ax402_WC_Settings
             'api_slug' => isset($input['api_slug'])
                 ? sanitize_title((string) $input['api_slug'])
                 : $current['api_slug'],
+            'enabled_token_ids' => array_key_exists('enabled_token_ids', $input)
+                ? self::sanitize_token_ids($input['enabled_token_ids'])
+                : $current['enabled_token_ids'],
         ];
 
         $api_key = $current['api_key'];
@@ -105,6 +144,22 @@ final class Ax402_WC_Settings
         unset($to_store['api_key']);
 
         update_option(self::OPTION_KEY, $to_store, false);
+    }
+
+    /**
+     * @param mixed $ids
+     * @return list<string>
+     */
+    private static function sanitize_token_ids(mixed $ids): array
+    {
+        if (!is_array($ids)) {
+            return [];
+        }
+
+        return array_values(array_unique(array_filter(array_map(
+            static fn ($id): string => sanitize_text_field((string) $id),
+            $ids
+        ))));
     }
 
     public static function client(): ?Ax402_WC_Control_Plane_Client

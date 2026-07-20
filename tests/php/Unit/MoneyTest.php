@@ -33,4 +33,11 @@ final class MoneyTest extends TestCase
         $this->assertSame('22.500000', Ax402_WC_Money::normalize_order_total(22.5));
         $this->assertSame('10.000000', Ax402_WC_Money::normalize_order_total('10'));
     }
+
+    public function test_usd_to_token_amount_one_to_one(): void
+    {
+        $amount = Ax402_WC_Money::usd_to_token_amount('22.500000', '1', 6);
+        $this->assertSame('22.500000', $amount);
+        $this->assertSame('22500000', Ax402_WC_Money::to_atomic($amount, 6));
+    }
 }

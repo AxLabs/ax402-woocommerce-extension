@@ -2,7 +2,7 @@
 
 ## What this is
 
-**Ax402 for WooCommerce** is a **payment provider plugin**. It adds an `ax402` payment method so a WooCommerce store can accept **x402 / Ax402** stablecoin payments (today: **USDC**, priced 1:1 with a **USD** catalog).
+**Ax402 for WooCommerce** is a **payment provider plugin**. It adds an `ax402` payment method so a WooCommerce store can accept **x402 / Ax402** on-chain settlements. The **catalog stays USD**; merchants enable settlement tokens from Ax402 platform config (e.g. USDC, USDT).
 
 It supports two buyer types on the same order lifecycle:
 
@@ -46,16 +46,18 @@ Those belong to **WooCommerce** (and optional third-party plugins). Merchants ma
 | Concern | Owner |
 |---|---|
 | Catalog prices, customers, order list | WooCommerce |
-| API key, pay-to wallet, network, enable gateway | Plugin → **WooCommerce → Settings → Payments → Ax402** |
+| API key, pay-to wallet, settlement tokens, enable gateway | Plugin → **WooCommerce → Settings → Payments → Ax402** |
 | HTTP 402 challenge, payment verify, proxy to fulfill | Ax402 gateway |
 | Mark order paid after verified payment | Plugin fulfill REST |
 
 ## Currency model (v0)
 
-- Store currency: **USD** (required).
-- Settlement: **USDC** on Base (Sepolia for dev, mainnet for production), **1:1** with the order total.
+- Store / catalog currency: **USD** (required). This is not a storefront multi-currency switcher.
+- Settlement assets come from Ax402 `GET /config/platform` → `payment_tokens`. Merchants multi-select which tokens the store accepts.
+- At payment prep, the plugin converts **USD order total → settlement amount** via an exchange-rate interface: common stablecoins (**USDC**, **USDT**, …) are **1:1**; other tokens need a resolvable rate (stub returns unavailable until a real market client exists).
+- Each order endpoint is created with **multiple `accepts`** (one per enabled, priced token). Humans pick an asset on the pay page; agents/buyers choose via their policy.
 - Sub-cent catalog prices are supported when decimals are raised (plugin helps when Ax402 is enabled).
-- Multi-currency catalog switching is **out of scope** for this plugin. Use WooCommerce (one base currency) or a dedicated multi-currency plugin if needed.
+- Registering settlement symbols as Woo store currencies / FX catalog browsing remains **out of scope**.
 
 ## Trust model (v0)
 

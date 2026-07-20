@@ -1,15 +1,18 @@
 # Ax402 WooCommerce Extension
 
-WooCommerce **payment provider** plugin that accepts **x402 / Ax402** USDC payments for humans (wallet / MetaMask) and agents (buyer SDK / CLI).
+WooCommerce **payment provider** plugin that accepts **x402 / Ax402** on-chain settlements for humans (wallet / MetaMask) and agents (buyer SDK / CLI).
 
-This is a gateway extension — not a full storefront. Catalog, cart, customers, and the order list stay in WooCommerce. See [docs/context.md](docs/context.md).
+The store catalog stays in **USD**. Settlement uses the same payment tokens Ax402 exposes on the platform (`USDC`, `USDT`, and other enabled assets) — merchants choose which to accept; shoppers (or agents) pick one at pay time. See [docs/context.md](docs/context.md).
+
+This is a gateway extension — not a full storefront. Catalog, cart, customers, and the order list stay in WooCommerce.
 
 ## Features (v0)
 
 - Checkout payment method `ax402`
-- Per-order Ax402 gateway endpoints priced to the cart total
-- Human pay page with `@ax402/react-paywall` (same-origin proxy for CORS)
-- Agent REST: products, create order, order status
+- Multi-asset settlement from Ax402 platform `payment_tokens` (admin multi-select)
+- Per-order gateway endpoints with multi-`accepts`, priced from the USD cart total
+- Human pay page: settlement picker, network switch + balance checks, `@ax402/react-paywall`
+- Agent REST: products, create order, order status (same multi-accept payment URL)
 - Fulfill upstream secured by `order_key` + one-time token
 - `wp-env` local development + demo product seed
 - Unit + live control-plane tests
@@ -48,7 +51,7 @@ npm run env:e2e     # re-seed + E2E readiness (set WP_BASE_URL after ngrok)
 | Admin | http://localhost:8888/wp-admin |
 | Login | `admin` / `password` |
 
-Configure **WooCommerce → Settings → Payments → Ax402**. Orders appear under **WooCommerce → Orders**.
+Configure **WooCommerce → Settings → Payments → Ax402** (API key, pay-to wallet, settlement tokens). Orders appear under **WooCommerce → Orders**.
 
 Full E2E (tunnel + pay): [docs/e2e.md](docs/e2e.md).
 

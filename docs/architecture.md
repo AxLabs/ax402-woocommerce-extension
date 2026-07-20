@@ -22,6 +22,6 @@ The human pay page runs on the store origin. Direct `fetch()` to `*.ax402.io` is
 
 ## Currency / networks
 
-- Store currency: **USD** (USDC 1:1).
+- Store currency: **USD**; settlement via merchant-enabled platform tokens (stables 1:1).
 - Dev network: Base Sepolia (`eip155:845320402`) from `/config/platform`.
 - Prod network: Base mainnet (`eip155:8453`).
