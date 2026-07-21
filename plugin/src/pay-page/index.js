@@ -20,13 +20,17 @@ function readConfig() {
 }
 
 function SettlementPicker({ options, selectedId, onSelect }) {
-	if (!options.length || options.length < 2) {
+	if (!options.length) {
 		return null;
 	}
 
+	const selectable = options.length > 1;
+
 	return (
 		<div className="ax402-settle">
-			<p className="ax402-settle-label">Pay with</p>
+			<p className="ax402-settle-label">
+				{selectable ? 'Choose settlement token' : 'Settlement token'}
+			</p>
 			<ul className="ax402-settle-list">
 				{options.map((option) => {
 					const active = option.tokenId === selectedId;
@@ -39,7 +43,13 @@ function SettlementPicker({ options, selectedId, onSelect }) {
 										? 'ax402-settle-option is-active'
 										: 'ax402-settle-option'
 								}
-								onClick={() => onSelect(option.tokenId)}
+								disabled={!selectable}
+								aria-pressed={active}
+								onClick={() => {
+									if (selectable) {
+										onSelect(option.tokenId);
+									}
+								}}
 							>
 								<span className="ax402-settle-symbol">
 									{option.symbol}
@@ -52,6 +62,12 @@ function SettlementPicker({ options, selectedId, onSelect }) {
 					);
 				})}
 			</ul>
+			{!selectable ? (
+				<p className="ax402-settle-hint">
+					Only one settlement token is enabled for this store. Enable
+					more under WooCommerce → Settings → Payments → Ax402.
+				</p>
+			) : null}
 		</div>
 	);
 }

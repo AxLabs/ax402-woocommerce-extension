@@ -148,6 +148,7 @@ final class Ax402_WC_Order_Payment
                 'rate' => (string) $option['rate'],
                 'chainIdHex' => (string) $option['chain_id_hex'],
                 'rpcUrl' => (string) $option['rpc_url'],
+                'blockExplorerUrl' => (string) ($option['explorer_url'] ?? ''),
                 'isNative' => Ax402_WC_Platform_Tokens::is_native_asset((string) $option['asset']),
             ];
         }

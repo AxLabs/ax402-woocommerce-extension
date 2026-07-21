@@ -18,7 +18,11 @@ Fulfill accepts requests that present a valid `order_key` and one-time `fulfill_
 
 ## Browser CORS
 
-The human pay page runs on the store origin. Direct `fetch()` to `*.ax402.io` is often blocked by CORS. Humans therefore call same-origin `GET/POST /wp-json/ax402/v1/pay-proxy/{order_key}`, and WordPress relays to the real gateway URL server-side. Agents still pay the real gateway URL directly.
+The human pay page runs on the store origin and calls the Ax402 gateway **directly**. On API create / settings save / pay-page load, the plugin pushes the store origin(s) to `PUT/POST /apis/{id}/cors` so the gateway allows browser `fetch()`.
+
+The same-origin `pay-proxy` route remains available as a fallback for older gateways that have not redeployed per-API CORS yet, but the pay page prefers the direct gateway URL.
+
+Agents still pay the real gateway URL directly.
 
 ## Currency / networks
 

@@ -4,10 +4,10 @@ declare(strict_types=1);
 defined('ABSPATH') || exit;
 
 /**
- * Same-origin proxy for browser paywall → Ax402 gateway (avoids CORS).
+ * Same-origin proxy for browser paywall → Ax402 gateway.
  *
- * The browser calls this WordPress route; WordPress server-side calls the gateway.
- * Agents should still use the real gateway URL directly.
+ * Prefer direct gateway calls with control-plane CORS. This proxy remains as a
+ * fallback for gateways that have not yet redeployed per-API origin support.
  */
 final class Ax402_WC_Gateway_Proxy_Controller
 {

@@ -30,12 +30,14 @@ final class Ax402_WC_Store_Onboarding
                 ? $settings['gateway_host']
                 : self::primary_hostname($api, $settings['api_slug'], $platform, $settings['network_mode']);
 
-            return [
+            $result = [
                 'api_id' => (string) $api['id'],
                 'gateway_host' => $host,
                 'gateway_url' => Ax402_WC_Platform_Tokens::gateway_base_url($host, $platform),
                 'api' => $api,
             ];
+            Ax402_WC_Gateway_Cors::ensure_store_origins($result['api_id'], $client);
+            return $result;
         }
 
         $slug = $settings['api_slug'] !== ''
@@ -58,12 +60,14 @@ final class Ax402_WC_Store_Onboarding
             'gateway_host' => $host,
         ]);
 
-        return [
+        $result = [
             'api_id' => (string) $api['id'],
             'gateway_host' => $host,
             'gateway_url' => Ax402_WC_Platform_Tokens::gateway_base_url($host, $platform),
             'api' => $api,
         ];
+        Ax402_WC_Gateway_Cors::ensure_store_origins($result['api_id'], $client);
+        return $result;
     }
 
     /**

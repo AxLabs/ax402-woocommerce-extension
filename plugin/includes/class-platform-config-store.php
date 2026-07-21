@@ -4,7 +4,7 @@ declare(strict_types=1);
 defined('ABSPATH') || exit;
 
 /**
- * Cached Ax402 platform config (payment tokens) for admin + checkout.
+ * Cached Ax402 platform config (payment tokens + supported networks) for admin + checkout.
  */
 final class Ax402_WC_Platform_Config_Store
 {
@@ -13,6 +13,7 @@ final class Ax402_WC_Platform_Config_Store
     /**
      * @return array{
      *   platform:array<string,mixed>,
+     *   supported_networks:array<string,mixed>|null,
      *   synced_at:int,
      *   error:string,
      *   token_count:int
@@ -26,9 +27,14 @@ final class Ax402_WC_Platform_Config_Store
         }
 
         $platform = is_array($stored['platform'] ?? null) ? $stored['platform'] : [];
+        $supported = $stored['supported_networks'] ?? null;
+        if ($supported !== null && !is_array($supported)) {
+            $supported = null;
+        }
 
         return [
             'platform' => $platform,
+            'supported_networks' => $supported,
             'synced_at' => (int) ($stored['synced_at'] ?? 0),
             'error' => (string) ($stored['error'] ?? ''),
             'token_count' => count(Ax402_WC_Platform_Tokens::enabled_tokens($platform)),
@@ -47,13 +53,19 @@ final class Ax402_WC_Platform_Config_Store
      * Persist a platform config payload (e.g. after a successful live fetch).
      *
      * @param array<string, mixed> $platform
+     * @param array<string, mixed>|null $supported_networks
      */
-    public static function store(array $platform, string $error = ''): void
-    {
+    public static function store(
+        array $platform,
+        string $error = '',
+        ?array $supported_networks = null
+    ): void {
+        $current = self::get();
         update_option(
             self::OPTION_KEY,
             [
                 'platform' => $platform,
+                'supported_networks' => $supported_networks ?? $current['supported_networks'],
                 'synced_at' => time(),
                 'error' => $error,
             ],
@@ -62,7 +74,7 @@ final class Ax402_WC_Platform_Config_Store
     }
 
     /**
-     * Fetch live platform config and persist cache.
+     * Fetch live platform config (+ supported networks) and persist cache.
      *
      * @return array{ok:bool,error:string,token_count:int,synced_at:int}
      */
@@ -72,6 +84,7 @@ final class Ax402_WC_Platform_Config_Store
         if ($client === null) {
             $payload = [
                 'platform' => self::platform(),
+                'supported_networks' => self::get()['supported_networks'],
                 'synced_at' => (int) (self::get()['synced_at'] ?? 0),
                 'error' => 'API key is required to sync platform tokens.',
             ];
@@ -87,7 +100,14 @@ final class Ax402_WC_Platform_Config_Store
 
         try {
             $platform = $client->get_platform_config();
-            self::store($platform);
+            $supported = null;
+            try {
+                $supported = $client->get_supported_networks();
+            } catch (Throwable $e) {
+                // Tokens still usable without facilitator network list.
+                $supported = self::get()['supported_networks'];
+            }
+            self::store($platform, '', $supported);
 
             return [
                 'ok' => true,
@@ -99,6 +119,7 @@ final class Ax402_WC_Platform_Config_Store
             $current = self::get();
             $payload = [
                 'platform' => $current['platform'],
+                'supported_networks' => $current['supported_networks'],
                 'synced_at' => $current['synced_at'],
                 'error' => $e->getMessage(),
             ];

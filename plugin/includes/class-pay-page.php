@@ -50,44 +50,69 @@ final class Ax402_WC_Pay_Page
 
         $options = Ax402_WC_Order_Payment::settlement_options_from_order($order);
         if ($options === []) {
-            $network = (string) $order->get_meta(Ax402_WC_Order_Payment::META_NETWORK);
-            if ($network === '') {
-                $network = Ax402_WC_Platform_Tokens::network_for_mode($settings['network_mode']);
+            try {
+                $platform = Ax402_WC_Platform_Config_Store::platform_or_sync();
+                $token_ids = Ax402_WC_Settings::enabled_token_ids($platform);
+                $rebuilt = Ax402_WC_Platform_Tokens::build_settlement_options(
+                    $platform,
+                    $token_ids,
+                    $amount_usd,
+                    $settings['scheme']
+                );
+                foreach ($rebuilt as $row) {
+                    $options[] = [
+                        'tokenId' => (string) $row['token_id'],
+                        'symbol' => (string) $row['symbol'],
+                        'name' => (string) $row['name'],
+                        'network' => (string) $row['network'],
+                        'networkLabel' => (string) $row['network_label'],
+                        'asset' => (string) $row['asset'],
+                        'decimals' => (int) $row['decimals'],
+                        'amount' => (string) $row['amount'],
+                        'amountAtomic' => (string) $row['amount_atomic'],
+                        'rate' => (string) $row['rate'],
+                        'chainIdHex' => (string) $row['chain_id_hex'],
+                        'rpcUrl' => (string) $row['rpc_url'],
+                        'blockExplorerUrl' => (string) ($row['explorer_url'] ?? ''),
+                        'isNative' => Ax402_WC_Platform_Tokens::is_native_asset((string) $row['asset']),
+                    ];
+                }
+            } catch (Throwable $e) {
+                $options = [];
             }
-            $asset = $network === Ax402_WC_Platform_Tokens::NETWORK_BASE_MAINNET
-                ? '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'
-                : '0x036CbD53842c5426634e7929541eC2318f3dCF7e';
-            $atomic = (string) $order->get_meta(Ax402_WC_Order_Payment::META_AMOUNT_ATOMIC);
-            $options = [[
-                'tokenId' => 'legacy-usdc',
-                'symbol' => 'USDC',
-                'name' => 'USD Coin',
-                'network' => $network,
-                'networkLabel' => Ax402_WC_Platform_Tokens::network_label($network),
-                'asset' => $asset,
-                'decimals' => 6,
-                'amount' => $amount_usd,
-                'amountAtomic' => $atomic !== '' ? $atomic : Ax402_WC_Money::usdc_to_atomic($amount_usd),
-                'rate' => '1',
-                'chainIdHex' => Ax402_WC_Platform_Tokens::chain_id_hex($network),
-                'rpcUrl' => Ax402_WC_Platform_Tokens::rpc_url_for_network($network),
-                'isNative' => false,
-            ]];
         }
 
         foreach ($options as &$option) {
-            $option['blockExplorerUrl'] = self::explorer_url((string) ($option['network'] ?? ''));
+            if (empty($option['blockExplorerUrl']) && !empty($option['network'])) {
+                $option['blockExplorerUrl'] = Ax402_WC_Platform_Tokens::explorer_url_for_network(
+                    (string) $option['network']
+                );
+            }
         }
         unset($option);
 
-        $primary = $options[0];
+        $primary = $options[0] ?? [
+            'network' => '',
+            'asset' => '',
+            'rpcUrl' => '',
+        ];
         $order_key = $order->get_order_key();
         $rpc_by_network = Ax402_WC_Platform_Tokens::rpc_urls();
 
+        // Ensure this store origin is allowed on the Ax402 gateway, then pay directly.
+        $settings_full = Ax402_WC_Settings::all();
+        if ($settings_full['api_id'] !== '') {
+            Ax402_WC_Gateway_Cors::ensure_store_origins($settings_full['api_id']);
+        }
+        $cors = Ax402_WC_Gateway_Cors::status();
+
         return [
-            // Browser paywall must use same-origin proxy to avoid gateway CORS.
-            'gatewayUrl' => rest_url('ax402/v1/pay-proxy/' . $order_key),
+            // Browser talks to the Ax402 gateway directly (CORS managed via control plane).
+            'gatewayUrl' => $gateway_url,
+            'proxyGatewayUrl' => rest_url('ax402/v1/pay-proxy/' . $order_key),
             'directGatewayUrl' => $gateway_url,
+            'corsOrigins' => $cors['origins'],
+            'corsError' => $cors['error'],
             'orderId' => $order->get_id(),
             'orderKey' => $order_key,
             'amountUsd' => $amount_usd,
@@ -102,15 +127,6 @@ final class Ax402_WC_Pay_Page
             'settlementOptions' => $options,
             'shopUrl' => wc_get_page_permalink('shop') ?: home_url('/'),
         ];
-    }
-
-    private static function explorer_url(string $network): string
-    {
-        return match ($network) {
-            Ax402_WC_Platform_Tokens::NETWORK_BASE_MAINNET => 'https://basescan.org',
-            Ax402_WC_Platform_Tokens::NETWORK_SEPOLIA => 'https://sepolia.basescan.org',
-            default => '',
-        };
     }
 
     public function maybe_render(): void
@@ -295,6 +311,13 @@ final class Ax402_WC_Pay_Page
         }
         .ax402-settle-symbol { font-weight: 700; }
         .ax402-settle-meta { color: var(--ax402-muted); font-size: 0.88rem; }
+        .ax402-settle-option:disabled { cursor: default; opacity: 1; }
+        .ax402-settle-hint {
+            margin: 0.55rem 0 0;
+            color: var(--ax402-muted);
+            font-size: 0.82rem;
+            line-height: 1.4;
+        }
         .ax402-banner {
             border-radius: 12px;
             padding: 0.85rem 0.95rem;
@@ -335,7 +358,14 @@ final class Ax402_WC_Pay_Page
         <p class="ax402-pay-brand">Ax402</p>
         <h1><?php echo esc_html__('Pay securely with your wallet', 'ax402-woocommerce'); ?></h1>
         <p class="ax402-pay-lead">
-            <?php echo esc_html__('Choose a settlement token, connect your wallet, and confirm the payment. We finalize the order automatically.', 'ax402-woocommerce'); ?>
+            <?php
+            $option_count = count($config['settlementOptions'] ?? []);
+            echo esc_html(
+                $option_count > 1
+                    ? __('Choose a settlement token, connect your wallet, and confirm the payment. We finalize the order automatically.', 'ax402-woocommerce')
+                    : __('Connect your wallet and confirm the payment. We finalize the order automatically.', 'ax402-woocommerce')
+            );
+            ?>
         </p>
         <section class="ax402-pay-card">
             <div id="ax402-pay-root">

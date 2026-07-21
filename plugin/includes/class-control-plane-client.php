@@ -18,6 +18,11 @@ final class Ax402_WC_Control_Plane_Client
         }
     }
 
+    public function base_url(): string
+    {
+        return $this->base_url;
+    }
+
     /**
      * @param array<string, mixed>|null $body
      * @return array{status:int,data?:mixed,error?:string}
@@ -51,6 +56,43 @@ final class Ax402_WC_Control_Plane_Client
         if (isset($result['error'])) {
             throw new RuntimeException('Platform config failed: ' . $result['error']);
         }
+        return is_array($result['data'] ?? null) ? $result['data'] : [];
+    }
+
+    /**
+     * Facilitator-supported networks (CAIP-2 ids inside kinds[]).
+     *
+     * @return array<string, mixed>
+     */
+    public function get_supported_networks(): array
+    {
+        $result = $this->request('GET', '/supported-networks');
+        if (isset($result['error'])) {
+            throw new RuntimeException('Supported networks failed: ' . $result['error']);
+        }
+        return is_array($result['data'] ?? null) ? $result['data'] : [];
+    }
+
+    /**
+     * Fetch USD (or other quote) prices for platform payment tokens.
+     *
+     * Response shape: { quote, rate_date, rates: [{ token_id, symbol, network, rate, ... }] }
+     * Each `rate` is the quote-currency price of one token unit (e.g. USD per XGAS).
+     *
+     * @return array{quote?:string,rate_date?:string,rates?:list<array<string,mixed>>}
+     */
+    public function get_exchange_rates(string $quote = 'usd'): array
+    {
+        $quote = strtolower(trim($quote));
+        if ($quote === '') {
+            $quote = 'usd';
+        }
+
+        $result = $this->request('GET', '/exchange-rates?quote=' . rawurlencode($quote));
+        if (isset($result['error'])) {
+            throw new RuntimeException('Exchange rates failed: ' . $result['error']);
+        }
+
         return is_array($result['data'] ?? null) ? $result['data'] : [];
     }
 
@@ -215,6 +257,74 @@ final class Ax402_WC_Control_Plane_Client
         if (isset($result['error']) && (int) ($result['status'] ?? 0) !== 404) {
             throw new RuntimeException('Delete endpoint failed: ' . $result['error']);
         }
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function get_cors_origins(string $api_id): array
+    {
+        $result = $this->request('GET', '/apis/' . rawurlencode($api_id) . '/cors');
+        if (isset($result['error'])) {
+            throw new RuntimeException('Get CORS failed: ' . $result['error']);
+        }
+        $origins = is_array($result['data']['origins'] ?? null) ? $result['data']['origins'] : [];
+        return array_values(array_filter(array_map('strval', $origins)));
+    }
+
+    /**
+     * Replace the full CORS origin list for an API.
+     *
+     * @param list<string> $origins
+     * @return list<string>
+     */
+    public function put_cors_origins(string $api_id, array $origins): array
+    {
+        $result = $this->request(
+            'PUT',
+            '/apis/' . rawurlencode($api_id) . '/cors',
+            ['origins' => array_values($origins)]
+        );
+        if (isset($result['error'])) {
+            throw new RuntimeException('Put CORS failed: ' . $result['error']);
+        }
+        $out = is_array($result['data']['origins'] ?? null) ? $result['data']['origins'] : [];
+        return array_values(array_filter(array_map('strval', $out)));
+    }
+
+    /**
+     * Add one origin (idempotent).
+     *
+     * @return list<string>
+     */
+    public function add_cors_origin(string $api_id, string $origin): array
+    {
+        $result = $this->request(
+            'POST',
+            '/apis/' . rawurlencode($api_id) . '/cors',
+            ['origin' => $origin]
+        );
+        if (isset($result['error'])) {
+            throw new RuntimeException('Add CORS origin failed: ' . $result['error']);
+        }
+        $out = is_array($result['data']['origins'] ?? null) ? $result['data']['origins'] : [];
+        return array_values(array_filter(array_map('strval', $out)));
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function remove_cors_origin(string $api_id, string $origin): array
+    {
+        $result = $this->request(
+            'DELETE',
+            '/apis/' . rawurlencode($api_id) . '/cors?origin=' . rawurlencode($origin)
+        );
+        if (isset($result['error'])) {
+            throw new RuntimeException('Remove CORS origin failed: ' . $result['error']);
+        }
+        $out = is_array($result['data']['origins'] ?? null) ? $result['data']['origins'] : [];
+        return array_values(array_filter(array_map('strval', $out)));
     }
 
     /**

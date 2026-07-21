@@ -99,14 +99,23 @@ final class PlatformTokensTest extends TestCase
     public function test_default_enabled_token_ids_sepolia_usdc(): void
     {
         $ids = Ax402_WC_Platform_Tokens::default_enabled_token_ids($this->platform, 'sepolia');
-        $this->assertSame(
-            ['eip155:845320402:0x036cbd53842c5426634e7929541ec2318f3dcf7e'],
+        $this->assertContains(
+            'eip155:845320402:0x036cbd53842c5426634e7929541ec2318f3dcf7e',
             $ids
         );
+        $this->assertCount(count(Ax402_WC_Platform_Tokens::enabled_tokens($this->platform)), $ids);
     }
 
     public function test_chain_id_hex(): void
     {
         $this->assertSame('0x2105', Ax402_WC_Platform_Tokens::chain_id_hex('eip155:8453'));
+    }
+
+    public function test_network_catalog_from_platform_tokens(): void
+    {
+        $catalog = \Ax402_WC_Network_Catalog::from_platform($this->platform);
+        $this->assertContains('eip155:8453', $catalog->networks());
+        $this->assertContains('eip155:845320402', $catalog->networks());
+        $this->assertNotSame('', $catalog->label('eip155:8453'));
     }
 }

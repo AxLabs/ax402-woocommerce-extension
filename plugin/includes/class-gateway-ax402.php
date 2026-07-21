@@ -83,15 +83,15 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
                 'default' => $plugin['pay_to_address'],
             ],
             'network_mode' => [
-                'title' => __('Default network seed', 'ax402-woocommerce'),
+                'title' => __('Environment seed', 'ax402-woocommerce'),
                 'type' => 'select',
                 'description' => __(
-                    'Used for gateway hostname onboarding and the default USDC token when no settlement tokens are selected yet. Checkout accepts follow the token checklist below.',
+                    'Only used for Ax402 gateway hostname onboarding (dev vs production platform domain). Settlement networks and tokens always come from the live platform sync below.',
                     'ax402-woocommerce'
                 ),
                 'options' => [
-                    'sepolia' => __('Base Sepolia (dev)', 'ax402-woocommerce'),
-                    'mainnet' => __('Base mainnet', 'ax402-woocommerce'),
+                    'sepolia' => __('Development / test domains', 'ax402-woocommerce'),
+                    'mainnet' => __('Production domain', 'ax402-woocommerce'),
                 ],
                 'default' => $plugin['network_mode'] ?: 'sepolia',
             ],
@@ -99,7 +99,7 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
                 'title' => __('Settlement tokens', 'ax402-woocommerce'),
                 'type' => 'ax402_tokens',
                 'description' => __(
-                    'Tokens from Ax402 platform config that this store accepts. Customers pick one on the pay page. Stablecoins settle 1:1 with the USD order total; other tokens need a resolvable exchange rate.',
+                    'Live list from Ax402 /config/platform. Customers pick one on the pay page. Stablecoins settle 1:1 with the USD order total; other tokens need a resolvable exchange rate.',
                     'ax402-woocommerce'
                 ),
             ],
@@ -108,6 +108,14 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
                 'type' => 'checkbox',
                 'label' => __('Sync payment tokens from Ax402 on save', 'ax402-woocommerce'),
                 'default' => 'no',
+            ],
+            'gateway_cors' => [
+                'title' => __('Gateway CORS', 'ax402-woocommerce'),
+                'type' => 'ax402_cors_status',
+                'description' => __(
+                    'Store origins are pushed to Ax402 so the pay page can call the gateway directly from the browser.',
+                    'ax402-woocommerce'
+                ),
             ],
             'api_slug' => [
                 'title' => __('Gateway slug', 'ax402-woocommerce'),
@@ -119,6 +127,69 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
                 'default' => $plugin['api_slug'],
             ],
         ];
+    }
+
+    /**
+     * @param string $key
+     * @param array<string, mixed> $data
+     */
+    public function generate_ax402_cors_status_html($key, $data): string
+    {
+        unset($key);
+        $data = wp_parse_args($data, [
+            'title' => '',
+            'description' => '',
+        ]);
+        $cors = Ax402_WC_Gateway_Cors::status();
+        $store = $cors['store_origins'];
+
+        ob_start();
+        ?>
+        <tr valign="top">
+            <th scope="row" class="titledesc">
+                <label><?php echo esc_html((string) $data['title']); ?></label>
+            </th>
+            <td class="forminp">
+                <p class="description" style="margin-top:0">
+                    <?php echo esc_html__('This store origin(s):', 'ax402-woocommerce'); ?>
+                    <code><?php echo esc_html($store !== [] ? implode(', ', $store) : '—'); ?></code>
+                </p>
+                <?php if ($cors['synced_at'] > 0) : ?>
+                    <p class="description">
+                        <?php
+                        echo esc_html(
+                            sprintf(
+                                /* translators: 1: datetime 2: origins */
+                                __('Last CORS sync: %1$s · gateway allows: %2$s', 'ax402-woocommerce'),
+                                wp_date(
+                                    get_option('date_format') . ' ' . get_option('time_format'),
+                                    $cors['synced_at']
+                                ),
+                                $cors['origins'] !== [] ? implode(', ', $cors['origins']) : '—'
+                            )
+                        );
+                        ?>
+                    </p>
+                <?php else : ?>
+                    <p class="description">
+                        <?php echo esc_html__(
+                            'CORS has not been synced yet. Save settings (with API key + pay-to) to push origins.',
+                            'ax402-woocommerce'
+                        ); ?>
+                    </p>
+                <?php endif; ?>
+                <?php if ($cors['error'] !== '') : ?>
+                    <p class="description" style="color:#b32d2e">
+                        <?php echo esc_html($cors['error']); ?>
+                    </p>
+                <?php endif; ?>
+                <?php if (!empty($data['description'])) : ?>
+                    <p class="description"><?php echo esc_html((string) $data['description']); ?></p>
+                <?php endif; ?>
+            </td>
+        </tr>
+        <?php
+        return (string) ob_get_clean();
     }
 
     /**
@@ -304,6 +375,16 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
         try {
             if (Ax402_WC_Settings::client() !== null && $payload['pay_to_address'] !== '') {
                 Ax402_WC_Store_Onboarding::ensure_api();
+                $cors = Ax402_WC_Gateway_Cors::status();
+                if ($cors['error'] !== '') {
+                    WC_Admin_Settings::add_error(
+                        sprintf(
+                            /* translators: %s: error message */
+                            __('Ax402 CORS sync: %s', 'ax402-woocommerce'),
+                            $cors['error']
+                        )
+                    );
+                }
             }
         } catch (Throwable $e) {
             WC_Admin_Settings::add_error(

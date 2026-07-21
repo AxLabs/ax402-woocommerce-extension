@@ -237,7 +237,7 @@ ax402-woocommerce-extension/
 | Seed wiped credentials | Old seed without merge (fixed) | Ensure current `bin/seed-wp-env.sh`; re-seed with `.env` |
 | Prices show `$0.00` for `$0.001` | 2 decimal places | Seed sets 4 decimals; enable Ax402 (plugin also raises display decimals) |
 | Pay page “Missing gateway URL” | Endpoint prep failed / meta missing | Check API key, network asset enabled, WP debug log |
-| Browser CORS to `*.ax402.io` | Direct browser fetch | Humans must use same-origin pay-proxy (built-in) |
+| Browser CORS to `*.ax402.io` | Direct browser fetch | Plugin auto-adds store origin via `/apis/{id}/cors` (gateway binary must support per-API CORS) |
 | Gateway cannot fulfill | Upstream is localhost | Use ngrok/tunnel + update `WP_HOME` / Ax402 `upstream_base_url` |
 | Sepolia endpoint create fails | Seller account missing Sepolia USDC asset | Use `AX402_NETWORK=mainnet` for smoke tests |
 | Docker permission errors | Docker daemon not running / sock access | Start Docker Desktop; retry `npm run env:start` |

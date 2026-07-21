@@ -24,8 +24,12 @@ if [[ -n "$WP_BASE_URL_VAL" ]]; then
   npx wp-env run cli wp config set WP_SITEURL "$WP_BASE_URL_VAL"
 
   echo "==> Syncing Ax402 API upstream_base_url (if API already onboarded)…"
+  # Escape for PHP without requiring host `php` (wp-env images have PHP; macOS hosts often do not).
+  BASE_PHP="$(
+    WP_BASE_URL_VAL="$WP_BASE_URL_VAL" python3 -c 'import json, os; print(json.dumps(os.environ["WP_BASE_URL_VAL"]))'
+  )"
   npx wp-env run cli wp eval "
-\$base = $(printf '%s' "$WP_BASE_URL_VAL" | php -r 'echo var_export(stream_get_contents(STDIN), true);');
+\$base = ${BASE_PHP};
 \$settings = Ax402_WC_Settings::all();
 \$client = Ax402_WC_Settings::client();
 if (\$client === null) {
@@ -40,10 +44,16 @@ if (\$settings['api_id'] === '') {
 \$current = rtrim((string) (\$api['upstream_base_url'] ?? ''), '/');
 if (\$current === rtrim(\$base, '/')) {
   echo \"upstream already matches {\$base}\n\";
-  return;
+} else {
+  \$client->update_api(\$settings['api_id'], ['upstream_base_url' => \$base]);
+  echo \"upstream updated to {\$base}\n\";
 }
-\$client->update_api(\$settings['api_id'], ['upstream_base_url' => \$base]);
-echo \"upstream updated to {\$base}\n\";
+\$cors = Ax402_WC_Gateway_Cors::ensure_store_origins(\$settings['api_id'], \$client);
+if (\$cors['ok']) {
+  echo \"cors origins: \" . implode(', ', \$cors['origins']) . \"\n\";
+} else {
+  echo \"cors sync warning: {\$cors['error']}\n\";
+}
 "
 else
   echo "==> WP_BASE_URL not set — skipped tunnel / upstream sync."

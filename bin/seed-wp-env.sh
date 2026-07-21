@@ -17,7 +17,10 @@ npx wp-env run cli wp option update woocommerce_default_country US:CA
 npx wp-env run cli wp option update woocommerce_price_num_decimals 4
 # WooCommerce enables "Coming soon" on fresh installs — keep the demo shop public.
 npx wp-env run cli wp option update woocommerce_coming_soon no
-npx wp-env run cli wp plugin activate woocommerce plugin || true
+# wp-env installs Woo from the zip URL as folder/slug `woocommerce.latest-stable`.
+npx wp-env run cli wp plugin activate woocommerce.latest-stable || \
+  npx wp-env run cli wp plugin activate woocommerce || true
+npx wp-env run cli wp plugin activate plugin || true
 
 # Enable gateway. Host .env is written into the mounted plugin dir (wp-env PHP
 # getenv() cannot see the host shell). Merge so empty values never wipe secrets.
@@ -44,7 +47,7 @@ if (!is_array($incoming)) {
 $gateway = [
   "enabled" => "yes",
   "title" => "Pay with Ax402",
-  "description" => "Pay with USDC via Ax402",
+  "description" => "Pay with a wallet token via Ax402",
   "base_url" => (string) ($incoming["base_url"] ?? "https://api.ax402.io"),
   "pay_to_address" => (string) ($incoming["pay_to_address"] ?? ""),
   "network_mode" => (string) ($incoming["network_mode"] ?? "sepolia"),
@@ -165,7 +168,7 @@ $products = [
     "price" => "0.01",
     "virtual" => true,
     "downloadable" => false,
-    "short" => "Tiny USDC checkout demo item.",
+    "short" => "Tiny USD checkout demo item.",
     "description" => "A one-cent demo product for Ax402 wallet and agent checkout tests.",
     "image" => $base . "/demo-product-chip.png",
   ],
@@ -186,7 +189,7 @@ $products = [
     "virtual" => true,
     "downloadable" => false,
     "short" => "Sub-cent signal credit.",
-    "description" => "A fractional demo product priced at \$0.001 USDC for micropayment demos.",
+    "description" => "A fractional demo product priced at \$0.001 for micropayment demos.",
     "image" => $base . "/demo-product-token.png",
   ],
   [
@@ -196,7 +199,7 @@ $products = [
     "virtual" => true,
     "downloadable" => false,
     "short" => "Ultra-small dust credit.",
-    "description" => "An ultra-small demo SKU at \$0.0003 USDC to exercise low-amount settlement.",
+    "description" => "An ultra-small demo SKU at \$0.0003 to exercise low-amount settlement.",
     "image" => $base . "/demo-product-guide.png",
   ],
   [
@@ -206,7 +209,7 @@ $products = [
     "virtual" => true,
     "downloadable" => false,
     "short" => "Ten-cent access pass.",
-    "description" => "A \$0.10 USDC demo product for mid-range micropayment checkout tests.",
+    "description" => "A \$0.10 demo product for mid-range micropayment checkout tests.",
     "image" => $base . "/demo-product-pass.png",
   ],
   [
@@ -216,7 +219,7 @@ $products = [
     "virtual" => true,
     "downloadable" => true,
     "short" => "Quarter-dollar starter pack.",
-    "description" => "A \$0.25 USDC demo pack for larger micropayment checkout tests.",
+    "description" => "A \$0.25 demo pack for larger micropayment checkout tests.",
     "image" => $base . "/demo-product-pack.png",
   ],
 ];
