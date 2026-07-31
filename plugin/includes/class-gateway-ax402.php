@@ -103,12 +103,6 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
                     'ax402-woocommerce'
                 ),
             ],
-            'refresh_platform_tokens' => [
-                'title' => __('Refresh tokens', 'ax402-woocommerce'),
-                'type' => 'checkbox',
-                'label' => __('Sync payment tokens from Ax402 on save', 'ax402-woocommerce'),
-                'default' => 'no',
-            ],
             'gateway_cors' => [
                 'title' => __('Gateway CORS', 'ax402-woocommerce'),
                 'type' => 'ax402_cors_status',
@@ -201,20 +195,36 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
     public function generate_ax402_tokens_html($key, $data): string
     {
         $field_key = $this->get_field_key($key);
+        $refresh_key = $this->get_field_key('refresh_platform_tokens');
         $data = wp_parse_args($data, [
             'title' => '',
             'description' => '',
         ]);
 
-        $cache = Ax402_WC_Platform_Config_Store::get();
-        if ($cache['platform'] === [] && Ax402_WC_Settings::client() !== null) {
-            Ax402_WC_Platform_Config_Store::sync();
-            $cache = Ax402_WC_Platform_Config_Store::get();
+        $settings = Ax402_WC_Settings::all();
+        $current_base = rtrim($settings['base_url'], '/');
+
+        // Always fetch live platform tokens when credentials exist so the admin
+        // list tracks /config/platform (not a stale cache from another base URL).
+        $sync_error = '';
+        if (Ax402_WC_Settings::client() !== null) {
+            $sync = Ax402_WC_Platform_Config_Store::sync();
+            if (!$sync['ok'] && $sync['error'] !== '') {
+                $sync_error = $sync['error'];
+            }
         }
+
+        $cache = Ax402_WC_Platform_Config_Store::get();
+        $cache_base = rtrim((string) ($cache['source_base_url'] ?? ''), '/');
+        $cache_stale = $cache['platform'] !== []
+            && $current_base !== ''
+            && (
+                $cache_base === ''
+                || strcasecmp($cache_base, $current_base) !== 0
+            );
 
         $platform = $cache['platform'];
         $tokens = Ax402_WC_Platform_Tokens::enabled_tokens($platform);
-        $settings = Ax402_WC_Settings::all();
         $selected = $settings['enabled_token_ids'];
         if ($selected === [] && $tokens !== []) {
             $selected = Ax402_WC_Platform_Tokens::default_enabled_token_ids(
@@ -222,7 +232,16 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
                 $settings['network_mode']
             );
         }
+        // Drop selections that no longer exist on the live platform list.
+        if ($tokens !== [] && $selected !== []) {
+            $valid_ids = array_map(
+                static fn (array $token): string => (string) ($token['id'] ?? ''),
+                $tokens
+            );
+            $selected = array_values(array_intersect($selected, $valid_ids));
+        }
         $rates = Ax402_WC_Composite_Exchange_Rates::default();
+        $display_error = $sync_error !== '' ? $sync_error : (string) ($cache['error'] ?? '');
 
         ob_start();
         ?>
@@ -242,18 +261,36 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
                                 wp_date(get_option('date_format') . ' ' . get_option('time_format'), $cache['synced_at'])
                             )
                         );
+                        if ($cache_base !== '') {
+                            echo ' ';
+                            echo esc_html(
+                                sprintf(
+                                    /* translators: %s: API base URL */
+                                    __('Source: %s', 'ax402-woocommerce'),
+                                    $cache_base
+                                )
+                            );
+                        }
                         ?>
                     </p>
                 <?php endif; ?>
-                <?php if ($cache['error'] !== '') : ?>
+                <?php if ($cache_stale) : ?>
                     <p class="description" style="color:#b32d2e;margin-bottom:0.75em">
-                        <?php echo esc_html($cache['error']); ?>
+                        <?php echo esc_html__(
+                            'Cached tokens are from a different API base URL. Save settings or click “Refresh tokens from Ax402”.',
+                            'ax402-woocommerce'
+                        ); ?>
+                    </p>
+                <?php endif; ?>
+                <?php if ($display_error !== '') : ?>
+                    <p class="description" style="color:#b32d2e;margin-bottom:0.75em">
+                        <?php echo esc_html($display_error); ?>
                     </p>
                 <?php endif; ?>
                 <?php if ($tokens === []) : ?>
                     <p class="description">
                         <?php echo esc_html__(
-                            'No platform tokens cached yet. Save an API key and check “Sync payment tokens from Ax402 on save”.',
+                            'No platform tokens available. Enter a valid API key for the base URL above, then save or refresh.',
                             'ax402-woocommerce'
                         ); ?>
                     </p>
@@ -306,6 +343,24 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
                         </ul>
                     </fieldset>
                 <?php endif; ?>
+                <p style="margin:0.9em 0 0.35em">
+                    <input type="hidden" name="<?php echo esc_attr($refresh_key); ?>" id="<?php echo esc_attr($refresh_key); ?>" value="0" />
+                    <button
+                        type="submit"
+                        class="button button-secondary"
+                        name="save"
+                        value="<?php echo esc_attr__('Refresh tokens from Ax402', 'ax402-woocommerce'); ?>"
+                        onclick="var el=document.getElementById('<?php echo esc_js($refresh_key); ?>'); if (el) { el.value='1'; }"
+                    >
+                        <?php echo esc_html__('Refresh tokens from Ax402', 'ax402-woocommerce'); ?>
+                    </button>
+                </p>
+                <p class="description" style="margin-top:0">
+                    <?php echo esc_html__(
+                        'This list is loaded live from Ax402 /config/platform when you open this page. It also refreshes when you change the API base URL or API key and save.',
+                        'ax402-woocommerce'
+                    ); ?>
+                </p>
                 <?php if (!empty($data['description'])) : ?>
                     <p class="description"><?php echo esc_html((string) $data['description']); ?></p>
                 <?php endif; ?>
@@ -336,6 +391,8 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
 
     public function sync_plugin_settings(): void
     {
+        $previous = Ax402_WC_Settings::all();
+
         $payload = [
             'base_url' => (string) $this->get_option('base_url', 'https://api.ax402.io'),
             'pay_to_address' => (string) $this->get_option('pay_to_address', ''),
@@ -349,16 +406,37 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
         }
 
         $api_key = (string) $this->get_option('api_key', '');
-        if ($api_key !== '') {
+        $api_key_changed = $api_key !== '';
+        if ($api_key_changed) {
             $payload['api_key'] = $api_key;
             // Do not persist plaintext API key in gateway settings.
             $this->update_option('api_key', '');
         }
 
+        $base_url_changed = strcasecmp(
+            rtrim($payload['base_url'], '/'),
+            rtrim($previous['base_url'], '/')
+        ) !== 0;
+
+        // Switching control planes invalidates the onboarded API id / host.
+        if ($base_url_changed) {
+            $payload['api_id'] = '';
+            $payload['gateway_host'] = '';
+        }
+
         Ax402_WC_Settings::update($payload);
 
-        $refresh = $this->get_option('refresh_platform_tokens', 'no') === 'yes';
-        if ($refresh || Ax402_WC_Platform_Config_Store::platform() === []) {
+        $refresh_key = $this->get_field_key('refresh_platform_tokens');
+        // phpcs:ignore WordPress.Security.NonceVerification.Missing -- WC settings form already verified.
+        $refresh_posted = isset($_POST[$refresh_key]) ? (string) wp_unslash($_POST[$refresh_key]) : '0';
+        $refresh_requested = $refresh_posted !== '' && $refresh_posted !== '0';
+
+        $should_refresh = $refresh_requested
+            || $base_url_changed
+            || $api_key_changed
+            || Ax402_WC_Platform_Config_Store::platform() === [];
+
+        if ($should_refresh) {
             $sync = Ax402_WC_Platform_Config_Store::sync();
             if (!$sync['ok'] && $sync['error'] !== '') {
                 WC_Admin_Settings::add_error(
@@ -368,8 +446,40 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
                         $sync['error']
                     )
                 );
+            } elseif ($sync['ok']) {
+                $platform = Ax402_WC_Platform_Config_Store::platform();
+                $valid_ids = [];
+                foreach (Ax402_WC_Platform_Tokens::enabled_tokens($platform) as $token) {
+                    $id = (string) ($token['id'] ?? '');
+                    if ($id !== '') {
+                        $valid_ids[] = $id;
+                    }
+                }
+
+                $selected = array_values(array_intersect($payload['enabled_token_ids'], $valid_ids));
+                if ($selected === [] && ($base_url_changed || $api_key_changed || $refresh_requested)) {
+                    $selected = Ax402_WC_Platform_Tokens::default_enabled_token_ids(
+                        $platform,
+                        $payload['network_mode']
+                    );
+                    $selected = array_values(array_intersect($selected, $valid_ids));
+                }
+
+                if ($selected !== $payload['enabled_token_ids']) {
+                    Ax402_WC_Settings::update(['enabled_token_ids' => $selected]);
+                    $this->update_option('settlement_tokens', $selected);
+                }
+
+                if ($base_url_changed || $api_key_changed || $refresh_requested) {
+                    WC_Admin_Settings::add_message(
+                        sprintf(
+                            /* translators: %d: token count */
+                            __('Ax402 settlement tokens refreshed (%d available).', 'ax402-woocommerce'),
+                            $sync['token_count']
+                        )
+                    );
+                }
             }
-            $this->update_option('refresh_platform_tokens', 'no');
         }
 
         try {

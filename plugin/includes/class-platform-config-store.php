@@ -16,7 +16,8 @@ final class Ax402_WC_Platform_Config_Store
      *   supported_networks:array<string,mixed>|null,
      *   synced_at:int,
      *   error:string,
-     *   token_count:int
+     *   token_count:int,
+     *   source_base_url:string
      * }
      */
     public static function get(): array
@@ -38,6 +39,7 @@ final class Ax402_WC_Platform_Config_Store
             'synced_at' => (int) ($stored['synced_at'] ?? 0),
             'error' => (string) ($stored['error'] ?? ''),
             'token_count' => count(Ax402_WC_Platform_Tokens::enabled_tokens($platform)),
+            'source_base_url' => (string) ($stored['source_base_url'] ?? ''),
         ];
     }
 
@@ -58,9 +60,15 @@ final class Ax402_WC_Platform_Config_Store
     public static function store(
         array $platform,
         string $error = '',
-        ?array $supported_networks = null
+        ?array $supported_networks = null,
+        ?string $source_base_url = null
     ): void {
         $current = self::get();
+        $base = $source_base_url;
+        if ($base === null) {
+            $settings = class_exists('Ax402_WC_Settings') ? Ax402_WC_Settings::all() : [];
+            $base = (string) ($settings['base_url'] ?? $current['source_base_url']);
+        }
         update_option(
             self::OPTION_KEY,
             [
@@ -68,6 +76,7 @@ final class Ax402_WC_Platform_Config_Store
                 'supported_networks' => $supported_networks ?? $current['supported_networks'],
                 'synced_at' => time(),
                 'error' => $error,
+                'source_base_url' => rtrim($base, '/'),
             ],
             false
         );
@@ -82,11 +91,13 @@ final class Ax402_WC_Platform_Config_Store
     {
         $client ??= Ax402_WC_Settings::client();
         if ($client === null) {
+            $current = self::get();
             $payload = [
-                'platform' => self::platform(),
-                'supported_networks' => self::get()['supported_networks'],
-                'synced_at' => (int) (self::get()['synced_at'] ?? 0),
+                'platform' => $current['platform'],
+                'supported_networks' => $current['supported_networks'],
+                'synced_at' => $current['synced_at'],
                 'error' => 'API key is required to sync platform tokens.',
+                'source_base_url' => $current['source_base_url'],
             ];
             update_option(self::OPTION_KEY, $payload, false);
 
@@ -122,6 +133,7 @@ final class Ax402_WC_Platform_Config_Store
                 'supported_networks' => $current['supported_networks'],
                 'synced_at' => $current['synced_at'],
                 'error' => $e->getMessage(),
+                'source_base_url' => $current['source_base_url'],
             ];
             update_option(self::OPTION_KEY, $payload, false);
 

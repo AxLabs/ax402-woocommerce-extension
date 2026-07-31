@@ -22,33 +22,40 @@ if [[ -n "$WP_BASE_URL_VAL" ]]; then
   echo "==> Pointing WordPress at public origin: ${WP_BASE_URL_VAL}"
   npx wp-env run cli wp config set WP_HOME "$WP_BASE_URL_VAL"
   npx wp-env run cli wp config set WP_SITEURL "$WP_BASE_URL_VAL"
+  # Keep DB options in sync too — mismatched home/siteurl makes
+  # http://localhost:8888 redirect to http://localhost/ (port 80) and look "down".
+  npx wp-env run cli wp option update home "$WP_BASE_URL_VAL"
+  npx wp-env run cli wp option update siteurl "$WP_BASE_URL_VAL"
 
-  echo "==> Syncing Ax402 API upstream_base_url (if API already onboarded)…"
+  echo "==> Syncing Ax402 API upstream_base_url (onboard / refresh)…"
   # Escape for PHP without requiring host `php` (wp-env images have PHP; macOS hosts often do not).
   BASE_PHP="$(
     WP_BASE_URL_VAL="$WP_BASE_URL_VAL" python3 -c 'import json, os; print(json.dumps(os.environ["WP_BASE_URL_VAL"]))'
   )"
   npx wp-env run cli wp eval "
 \$base = ${BASE_PHP};
-\$settings = Ax402_WC_Settings::all();
 \$client = Ax402_WC_Settings::client();
 if (\$client === null) {
   echo \"skip upstream: missing API client (API key?)\n\";
   return;
 }
-if (\$settings['api_id'] === '') {
-  echo \"no api_id yet — will be created on first checkout / gateway save\n\";
+try {
+  \$onboarded = Ax402_WC_Store_Onboarding::ensure_api(\$client);
+} catch (Throwable \$e) {
+  echo \"onboard failed: \" . \$e->getMessage() . \"\n\";
   return;
 }
-\$api = \$client->get_api(\$settings['api_id']);
+\$api_id = \$onboarded['api_id'];
+\$api = \$onboarded['api'];
 \$current = rtrim((string) (\$api['upstream_base_url'] ?? ''), '/');
 if (\$current === rtrim(\$base, '/')) {
   echo \"upstream already matches {\$base}\n\";
 } else {
-  \$client->update_api(\$settings['api_id'], ['upstream_base_url' => \$base]);
+  \$client->update_api(\$api_id, ['upstream_base_url' => \$base]);
   echo \"upstream updated to {\$base}\n\";
 }
-\$cors = Ax402_WC_Gateway_Cors::ensure_store_origins(\$settings['api_id'], \$client);
+echo \"api_id={\$api_id} gateway_host={\$onboarded['gateway_host']}\n\";
+\$cors = Ax402_WC_Gateway_Cors::ensure_store_origins(\$api_id, \$client);
 if (\$cors['ok']) {
   echo \"cors origins: \" . implode(', ', \$cors['origins']) . \"\n\";
 } else {

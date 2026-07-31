@@ -161,21 +161,49 @@ final class Ax402_WC_Platform_Tokens
     }
 
     /**
-     * Default merchant selection: all enabled platform tokens (sorted).
-     * Checkout still omits tokens without a resolvable FX rate.
+     * Default merchant selection seeded from platform tokens.
+     * Prefer tokens matching the environment seed (mainnet vs sepolia/dev).
      *
      * @param array<string, mixed> $platform
      * @return list<string>
      */
     public static function default_enabled_token_ids(array $platform, string $network_mode = 'mainnet'): array
     {
-        unset($network_mode);
         $ids = [];
         foreach (self::enabled_tokens($platform) as $token) {
+            $network = (string) ($token['network'] ?? '');
+            if (!self::network_matches_mode($network, $network_mode)) {
+                continue;
+            }
             $ids[] = (string) $token['id'];
         }
 
+        // Fallback: if the seed filtered everything out, keep prior “all tokens” behavior.
+        if ($ids === []) {
+            foreach (self::enabled_tokens($platform) as $token) {
+                $ids[] = (string) $token['id'];
+            }
+        }
+
         return $ids;
+    }
+
+    /**
+     * Ax402 uses eip155:845320402 as its Base Sepolia / development network id.
+     */
+    public static function network_matches_mode(string $network, string $network_mode): bool
+    {
+        $network = trim($network);
+        if ($network === '') {
+            return false;
+        }
+
+        $is_dev = $network === self::NETWORK_SEPOLIA
+            || $network === 'eip155:84532'
+            || str_contains($network, '845320402')
+            || str_contains($network, '84532');
+
+        return $network_mode === 'sepolia' ? $is_dev : !$is_dev;
     }
 
     /**

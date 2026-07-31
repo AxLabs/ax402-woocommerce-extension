@@ -11,6 +11,95 @@ final class Ax402_WC_Pay_Page
     public function register(): void
     {
         add_action('template_redirect', [$this, 'maybe_render'], 0);
+        add_action('woocommerce_thankyou_ax402', [$this, 'render_order_received_cta'], 5);
+    }
+
+    /**
+     * Pending Ax402 orders on the thank-you page need a path back to the wallet pay UI.
+     */
+    public function render_order_received_cta(int $order_id): void
+    {
+        $order = wc_get_order($order_id);
+        if (!$order instanceof WC_Order) {
+            return;
+        }
+        if ($order->get_payment_method() !== Ax402_WC_Gateway_Ax402::GATEWAY_ID) {
+            return;
+        }
+
+        Ax402_WC_Settlement_Reconcile::reconcile_order($order);
+        $order = wc_get_order($order_id);
+        if (!$order instanceof WC_Order) {
+            return;
+        }
+
+        if ($order->is_paid() || !$order->has_status(['pending', 'on-hold', 'failed'])) {
+            return;
+        }
+
+        $pay_url = Ax402_WC_Order_Payment::pay_page_url($order);
+        $message = sprintf(
+            '%1$s <a href="%2$s" class="button">%3$s</a>',
+            esc_html__(
+                'This order is still awaiting Ax402 payment. Continue to the wallet pay page to finish checkout.',
+                'ax402-woocommerce'
+            ),
+            esc_url($pay_url),
+            esc_html(
+                sprintf(
+                    /* translators: %d: order number */
+                    __('Continue payment for order #%d', 'ax402-woocommerce'),
+                    $order->get_id()
+                )
+            )
+        );
+
+        // Use WooCommerce's native error notice (typically light red) so themes
+        // style it instead of hardcoding a plugin background color.
+        wc_print_notice($message, 'error');
+    }
+
+    /**
+     * Return a live gateway payment URL, re-preparing the endpoint when missing/stale.
+     *
+     * @throws Throwable
+     */
+    private function resolve_gateway_url(WC_Order $order): string
+    {
+        $gateway_url = (string) $order->get_meta(Ax402_WC_Order_Payment::META_GATEWAY_URL);
+        if ($gateway_url !== '' && $this->gateway_endpoint_is_live($gateway_url)) {
+            return $gateway_url;
+        }
+
+        $prepared = Ax402_WC_Order_Payment::prepare($order);
+        return (string) $prepared['gateway_url'];
+    }
+
+    /**
+     * Unpaid endpoints should answer 402 Payment Required; 200 means already fulfilled upstream.
+     */
+    private function gateway_endpoint_is_live(string $gateway_url): bool
+    {
+        if (!wp_http_validate_url($gateway_url)) {
+            return false;
+        }
+
+        $response = wp_remote_get(
+            $gateway_url,
+            [
+                'timeout' => 15,
+                'redirection' => 0,
+                'headers' => [
+                    'Accept' => 'application/json',
+                ],
+            ]
+        );
+        if (is_wp_error($response)) {
+            return false;
+        }
+
+        $status = (int) wp_remote_retrieve_response_code($response);
+        return in_array($status, [200, 402], true);
     }
 
     /**
@@ -121,6 +210,8 @@ final class Ax402_WC_Pay_Page
             'allowedAssets' => (string) ($primary['asset'] ?? ''),
             'statusUrl' => rest_url('ax402/v1/orders/' . $order_key),
             'thankYouUrl' => $order->get_checkout_order_received_url(),
+            'orderUrl' => $order->get_checkout_order_received_url(),
+            'payPageUrl' => Ax402_WC_Order_Payment::pay_page_url($order),
             'preferredNetworks' => (string) ($primary['network'] ?? ''),
             'rpcUrl' => (string) ($primary['rpcUrl'] ?? ''),
             'rpcByNetwork' => $rpc_by_network,
@@ -146,29 +237,31 @@ final class Ax402_WC_Pay_Page
             wp_die(esc_html__('Order not found.', 'ax402-woocommerce'), 404);
         }
 
+        Ax402_WC_Settlement_Reconcile::reconcile_order($order);
+        $order = wc_get_order($order->get_id());
+        if (!$order instanceof WC_Order) {
+            wp_die(esc_html__('Order not found.', 'ax402-woocommerce'), 404);
+        }
+
         if ($order->is_paid()) {
             wp_safe_redirect($order->get_checkout_order_received_url());
             exit;
         }
 
-        $gateway_url = (string) $order->get_meta(Ax402_WC_Order_Payment::META_GATEWAY_URL);
-        if ($gateway_url === '') {
-            try {
-                $prepared = Ax402_WC_Order_Payment::prepare($order);
-                $gateway_url = $prepared['gateway_url'];
-            } catch (Throwable $e) {
-                wp_die(
-                    esc_html(
-                        sprintf(
-                            /* translators: %s: error message */
-                            __('Payment is not ready yet: %s', 'ax402-woocommerce'),
-                            $e->getMessage()
-                        )
-                    ),
-                    esc_html__('Ax402 payment', 'ax402-woocommerce'),
-                    ['response' => 409]
-                );
-            }
+        try {
+            $gateway_url = $this->resolve_gateway_url($order);
+        } catch (Throwable $e) {
+            wp_die(
+                esc_html(
+                    sprintf(
+                        /* translators: %s: error message */
+                        __('Payment is not ready yet: %s', 'ax402-woocommerce'),
+                        $e->getMessage()
+                    )
+                ),
+                esc_html__('Ax402 payment', 'ax402-woocommerce'),
+                ['response' => 409]
+            );
         }
 
         $config = $this->page_config($order, $gateway_url);
@@ -255,12 +348,83 @@ final class Ax402_WC_Pay_Page
             margin: 0 0 1.5rem;
             line-height: 1.5;
         }
+        .ax402-info {
+            position: relative;
+            display: inline;
+            white-space: nowrap;
+        }
+        .ax402-info-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 1.05em;
+            height: 1.05em;
+            margin: 0 0 0 0.2em;
+            padding: 0;
+            vertical-align: -0.12em;
+            border: 0;
+            background: transparent;
+            color: var(--ax402-accent);
+            cursor: help;
+            opacity: 0.9;
+        }
+        .ax402-info-btn svg {
+            width: 1.05em;
+            height: 1.05em;
+            display: block;
+        }
+        .ax402-info-btn:hover,
+        .ax402-info-btn:focus-visible,
+        .ax402-info.is-open .ax402-info-btn {
+            opacity: 1;
+            outline: none;
+            filter: drop-shadow(0 0 4px rgba(124,255,178,0.45));
+        }
+        .ax402-info-tip {
+            position: absolute;
+            left: 50%;
+            bottom: calc(100% + 0.5rem);
+            transform: translateX(-50%);
+            width: max-content;
+            max-width: min(16.5rem, 70vw);
+            padding: 0.55rem 0.7rem;
+            border-radius: 10px;
+            border: 1px solid var(--ax402-border);
+            background: #121a24;
+            color: var(--ax402-text);
+            font-size: 0.8rem;
+            line-height: 1.35;
+            white-space: normal;
+            box-shadow: 0 10px 28px rgba(0,0,0,0.35);
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            transition: opacity 0.12s ease;
+            z-index: 5;
+        }
+        .ax402-info-tip::after {
+            content: "";
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 6px solid transparent;
+            border-top-color: #121a24;
+        }
+        .ax402-info:hover .ax402-info-tip,
+        .ax402-info:focus-within .ax402-info-tip,
+        .ax402-info.is-open .ax402-info-tip {
+            opacity: 1;
+            visibility: visible;
+        }
         .ax402-pay-card {
             border: 1px solid var(--ax402-border);
             background: var(--ax402-card);
             border-radius: 18px;
             padding: 1.25rem;
             backdrop-filter: blur(8px);
+            overflow: hidden;
+            box-sizing: border-box;
         }
         .ax402-order-summary {
             display: grid;
@@ -312,38 +476,129 @@ final class Ax402_WC_Pay_Page
         .ax402-settle-symbol { font-weight: 700; }
         .ax402-settle-meta { color: var(--ax402-muted); font-size: 0.88rem; }
         .ax402-settle-option:disabled { cursor: default; opacity: 1; }
-        .ax402-settle-hint {
-            margin: 0.55rem 0 0;
+        .ax402-steps { margin-top: 0.25rem; }
+        .ax402-step {
+            border: 1px solid var(--ax402-border);
+            background: rgba(0,0,0,0.22);
+            border-radius: 14px;
+            padding: 1rem 1.05rem 1.1rem;
+        }
+        .ax402-step-title {
+            margin: 0 0 0.4rem;
+            font-size: 1.15rem;
+            line-height: 1.25;
+        }
+        .ax402-step-desc {
+            margin: 0 0 1rem;
             color: var(--ax402-muted);
-            font-size: 0.82rem;
+            line-height: 1.45;
+            font-size: 0.95rem;
+        }
+        .ax402-step-hint {
+            margin: 0;
+            color: var(--ax402-muted);
+            line-height: 1.45;
+            font-size: 0.9rem;
+        }
+        .ax402-step-error {
+            margin: 0.75rem 0 0;
+            color: var(--ax402-error);
+            font-size: 0.9rem;
             line-height: 1.4;
         }
-        .ax402-banner {
-            border-radius: 12px;
-            padding: 0.85rem 0.95rem;
-            margin: 0 0 0.85rem;
-            border: 1px solid var(--ax402-border);
+        .ax402-step-meta,
+        .ax402-step-footer {
+            margin-top: 0.85rem;
+            color: var(--ax402-muted);
+            font-size: 0.82rem;
         }
-        .ax402-banner p { margin: 0 0 0.65rem; line-height: 1.4; }
-        .ax402-banner-warn { background: rgba(255,210,122,0.08); color: var(--ax402-warn); }
-        .ax402-banner-error { background: rgba(255,143,143,0.08); color: var(--ax402-error); }
-        .ax402-banner-btn {
+        .ax402-primary-btn {
             border: 0;
             border-radius: 10px;
-            padding: 0.55rem 0.9rem;
+            padding: 0.7rem 1rem;
             background: var(--ax402-accent);
             color: #061018;
             font-weight: 700;
             cursor: pointer;
+            font-size: 0.95rem;
         }
-        .ax402-banner-btn:disabled { opacity: 0.6; cursor: wait; }
-        .ax402-ready-error { color: var(--ax402-error); font-size: 0.9rem; }
-        .ax402-pay-gate.is-blocked {
-            opacity: 0.45;
-            pointer-events: none;
-            filter: grayscale(0.2);
+        .ax402-primary-btn:disabled { opacity: 0.6; cursor: wait; }
+        .ax402-pay-step { margin-top: 0.15rem; max-width: 100%; }
+        /* Dedicated pay page: keep paywall card in normal flow (not a stacked overlay). */
+        .ax402-inline-gate.x402-paywall-gate,
+        .ax402-pay-card .x402-paywall-gate {
+            position: static;
+            max-width: 100%;
         }
-        #ax402-pay-root { min-height: 220px; }
+        .ax402-pay-card .x402-paywall-teaser {
+            display: none;
+        }
+        .ax402-pay-card .x402-paywall-overlay {
+            position: static !important;
+            inset: auto !important;
+            display: block;
+            background: transparent !important;
+            padding: 0 !important;
+            max-width: 100%;
+            box-sizing: border-box;
+        }
+        .ax402-pay-card .x402-paywall-card {
+            box-sizing: border-box;
+            max-width: 100% !important;
+            width: 100% !important;
+            margin: 0;
+            padding: 1rem 0 0;
+            border: 0;
+            border-top: 1px solid var(--ax402-border);
+            border-radius: 0;
+            background: transparent;
+            box-shadow: none;
+            color: var(--ax402-text);
+            text-align: left;
+        }
+        .ax402-pay-card .x402-paywall-title {
+            color: var(--ax402-text);
+            font-size: 1.15rem;
+        }
+        .ax402-pay-card .x402-paywall-desc,
+        .ax402-pay-card .x402-paywall-wallet {
+            color: var(--ax402-muted);
+        }
+        .ax402-pay-card .x402-paywall-price {
+            color: var(--ax402-accent);
+            font-weight: 700;
+        }
+        .ax402-pay-card .x402-paywall-actions {
+            max-width: 100%;
+        }
+        .ax402-pay-card .x402-paywall-btn {
+            box-sizing: border-box;
+            max-width: 100%;
+        }
+        .ax402-pay-card .x402-paywall-btn-primary {
+            background: var(--ax402-accent);
+            color: #061018;
+            border: 0;
+            font-weight: 700;
+        }
+        #ax402-pay-root { min-height: 180px; }
+        .ax402-pay-loading {
+            color: var(--ax402-muted);
+            margin: 0;
+            line-height: 1.5;
+        }
+        .ax402-spinner {
+            width: 2rem;
+            height: 2rem;
+            margin: 0.35rem 0 0.75rem;
+            border: 2px solid rgba(125, 211, 252, 0.25);
+            border-top-color: var(--ax402-accent);
+            border-radius: 50%;
+            animation: ax402-spin 0.75s linear infinite;
+        }
+        @keyframes ax402-spin {
+            to { transform: rotate(360deg); }
+        }
         .ax402-pay-help {
             margin-top: 1.25rem;
             color: var(--ax402-muted);
@@ -351,6 +606,47 @@ final class Ax402_WC_Pay_Page
             line-height: 1.45;
         }
         .ax402-pay-help a { color: var(--ax402-accent); }
+        .ax402-pay-help-sep {
+            margin: 0 0.35rem;
+            color: var(--ax402-muted);
+            opacity: 0.7;
+        }
+        .ax402-pay-powered {
+            margin: 0.55rem 0 0;
+            color: var(--ax402-muted);
+            font-size: 0.84rem;
+            line-height: 1.4;
+        }
+        .ax402-pay-powered a {
+            color: var(--ax402-accent);
+            text-decoration: none;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.28rem;
+        }
+        .ax402-pay-powered a:hover,
+        .ax402-pay-powered a:focus-visible {
+            text-decoration: underline;
+            outline: none;
+        }
+        .ax402-ext-icon {
+            width: 0.85em;
+            height: 0.85em;
+            flex: 0 0 auto;
+            opacity: 0.9;
+        }
+        .screen-reader-text {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
     </style>
 </head>
 <body class="ax402-pay-body">
@@ -362,14 +658,32 @@ final class Ax402_WC_Pay_Page
             $option_count = count($config['settlementOptions'] ?? []);
             echo esc_html(
                 $option_count > 1
-                    ? __('Choose a settlement token, connect your wallet, and confirm the payment. We finalize the order automatically.', 'ax402-woocommerce')
-                    : __('Connect your wallet and confirm the payment. We finalize the order automatically.', 'ax402-woocommerce')
+                    ? __('Choose a settlement token, then connect and just sign the payment. We finalize the order automatically.', 'ax402-woocommerce')
+                    : __('Connect and just sign the payment. We finalize the order automatically.', 'ax402-woocommerce')
             );
             ?>
+            <span class="ax402-info" data-ax402-info>
+                <button
+                    type="button"
+                    class="ax402-info-btn"
+                    aria-label="<?php echo esc_attr__('No network fees required. We cover them for you.', 'ax402-woocommerce'); ?>"
+                    aria-describedby="ax402-fee-tip"
+                    aria-expanded="false"
+                >
+                    <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                        <circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.5" />
+                        <circle cx="8" cy="4.6" r="1" fill="currentColor" />
+                        <path d="M8 7.1v4.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+                    </svg>
+                </button>
+                <span class="ax402-info-tip" id="ax402-fee-tip" role="tooltip">
+                    <?php echo esc_html__('No network fees required. We cover them for you.', 'ax402-woocommerce'); ?>
+                </span>
+            </span>
         </p>
         <section class="ax402-pay-card">
             <div id="ax402-pay-root">
-                <p class="ax402-pay-lead"><?php echo esc_html__('Loading payment…', 'ax402-woocommerce'); ?></p>
+                <p class="ax402-pay-loading"><?php echo esc_html__('Loading payment…', 'ax402-woocommerce'); ?></p>
             </div>
         </section>
         <p class="ax402-pay-help">
@@ -377,10 +691,58 @@ final class Ax402_WC_Pay_Page
             <a href="<?php echo esc_url((string) $config['shopUrl']); ?>">
                 <?php echo esc_html__('Return to shop', 'ax402-woocommerce'); ?>
             </a>
+            <span class="ax402-pay-help-sep" aria-hidden="true">·</span>
+            <a href="<?php echo esc_url((string) ($config['orderUrl'] ?? $config['thankYouUrl'])); ?>">
+                <?php
+                echo esc_html(
+                    sprintf(
+                        /* translators: %d: order number */
+                        __('Order details #%d', 'ax402-woocommerce'),
+                        (int) ($config['orderId'] ?? 0)
+                    )
+                );
+                ?>
+            </a>
+        </p>
+        <p class="ax402-pay-powered">
+            <?php echo esc_html__('Powered by', 'ax402-woocommerce'); ?>
+            <a href="https://ax402.io" target="_blank" rel="noopener noreferrer">
+                Ax402
+                <svg class="ax402-ext-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                    <path
+                        fill="currentColor"
+                        d="M6.5 2.5a.75.75 0 0 0 0 1.5h4.19L3.22 11.47a.75.75 0 1 0 1.06 1.06L11.75 5.06v4.19a.75.75 0 0 0 1.5 0v-6a.75.75 0 0 0-.75-.75h-6z"
+                    />
+                </svg>
+                <span class="screen-reader-text"><?php echo esc_html__('(opens in a new tab)', 'ax402-woocommerce'); ?></span>
+            </a>
         </p>
     </main>
     <script>
         window.ax402PayPage = <?php echo $config_json ? $config_json : '{}'; ?>;
+        (function () {
+            var root = document.querySelector('[data-ax402-info]');
+            if (!root) return;
+            var btn = root.querySelector('.ax402-info-btn');
+            if (!btn) return;
+            btn.addEventListener('click', function (event) {
+                event.preventDefault();
+                var open = root.classList.toggle('is-open');
+                btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+            });
+            document.addEventListener('click', function (event) {
+                if (!root.contains(event.target)) {
+                    root.classList.remove('is-open');
+                    btn.setAttribute('aria-expanded', 'false');
+                }
+            });
+            document.addEventListener('keydown', function (event) {
+                if (event.key === 'Escape') {
+                    root.classList.remove('is-open');
+                    btn.setAttribute('aria-expanded', 'false');
+                }
+            });
+        })();
     </script>
     <?php wp_footer(); ?>
 </body>

@@ -103,7 +103,23 @@ final class PlatformTokensTest extends TestCase
             'eip155:845320402:0x036cbd53842c5426634e7929541ec2318f3dcf7e',
             $ids
         );
-        $this->assertCount(count(Ax402_WC_Platform_Tokens::enabled_tokens($this->platform)), $ids);
+        $this->assertNotContains(
+            'eip155:8453:0x833589fcd6edb6e08f4c7c32d4f71b54bda02913',
+            $ids
+        );
+    }
+
+    public function test_default_enabled_token_ids_mainnet_excludes_sepolia(): void
+    {
+        $ids = Ax402_WC_Platform_Tokens::default_enabled_token_ids($this->platform, 'mainnet');
+        $this->assertContains(
+            'eip155:8453:0x833589fcd6edb6e08f4c7c32d4f71b54bda02913',
+            $ids
+        );
+        $this->assertNotContains(
+            'eip155:845320402:0x036cbd53842c5426634e7929541ec2318f3dcf7e',
+            $ids
+        );
     }
 
     public function test_chain_id_hex(): void

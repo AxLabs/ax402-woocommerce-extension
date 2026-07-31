@@ -32,4 +32,22 @@ describe('pollUntilPaid', () => {
     expect(data.paid).toBe(true);
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
+
+  it('rejects when paid never becomes true before timeout', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ paid: false }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const promise = pollUntilPaid('https://example.test/status', {
+      intervalMs: 10,
+      timeoutMs: 35,
+    });
+    const expectation = expect(promise).rejects.toThrow(
+      /Timed out waiting for paid status/
+    );
+    await vi.advanceTimersByTimeAsync(50);
+    await expectation;
+  });
 });

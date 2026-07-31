@@ -146,6 +146,13 @@ final class Ax402_WC_Agent_Rest_Controller
             return new WP_Error('ax402_not_found', 'Order not found', ['status' => 404]);
         }
 
+        // Gateway may settle on-chain without reaching shop fulfill (e.g. tunnel blocks).
+        Ax402_WC_Settlement_Reconcile::reconcile_order($order);
+        $order = wc_get_order($order_id);
+        if (!$order instanceof WC_Order) {
+            return new WP_Error('ax402_not_found', 'Order not found', ['status' => 404]);
+        }
+
         $downloads = [];
         if ($order->is_paid()) {
             foreach ($order->get_downloadable_items() as $item) {

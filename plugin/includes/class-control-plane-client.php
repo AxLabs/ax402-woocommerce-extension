@@ -260,6 +260,21 @@ final class Ax402_WC_Control_Plane_Client
     }
 
     /**
+     * Settlements recorded by Ax402 after on-chain payment verification.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function list_settlements(string $api_id): array
+    {
+        $result = $this->request('GET', '/apis/' . rawurlencode($api_id) . '/settlements');
+        if (isset($result['error'])) {
+            throw new RuntimeException('List settlements failed: ' . $result['error']);
+        }
+
+        return Ax402_WC_Settlement_Reconcile::normalize_settlements_payload($result['data'] ?? null);
+    }
+
+    /**
      * @return list<string>
      */
     public function get_cors_origins(string $api_id): array

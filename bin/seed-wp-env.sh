@@ -89,13 +89,23 @@ function ax402_seed_attach_image(string $absolute_path, string $title): int {
     echo "missing image: {$absolute_path}\n";
     return 0;
   }
+
+  // Copy first: media_handle_sideload treats tmp_name like an upload temp and
+  // moves/deletes it — never point it at the tracked plugin assets.
+  $tmp = wp_tempnam(basename($absolute_path));
+  if ($tmp === false || !@copy($absolute_path, $tmp)) {
+    echo "copy failed for {$absolute_path}\n";
+    return 0;
+  }
+
   $file = [
     "name" => basename($absolute_path),
-    "tmp_name" => $absolute_path,
+    "tmp_name" => $tmp,
   ];
   $id = media_handle_sideload($file, 0, $title);
   if (is_wp_error($id)) {
-    // media_handle_sideload expects an uploaded tmp file; fall back to copy into uploads.
+    @unlink($tmp);
+    // Fallback: read source bytes into uploads without touching the asset file.
     require_once ABSPATH . "wp-admin/includes/file.php";
     require_once ABSPATH . "wp-admin/includes/media.php";
     require_once ABSPATH . "wp-admin/includes/image.php";
@@ -149,7 +159,9 @@ function ax402_seed_product(array $p): void {
   $product->set_downloadable(!empty($p["downloadable"]));
   $product->set_sold_individually(false);
 
-  if (!empty($p["image"])) {
+  // Only attach once — re-sideloading on every seed would be wasteful and used
+  // to delete the tracked PNGs when tmp_name pointed at the plugin assets.
+  if (!empty($p["image"]) && (int) $product->get_image_id() <= 0) {
     $image_id = ax402_seed_attach_image($p["image"], $p["name"]);
     if ($image_id > 0) {
       $product->set_image_id($image_id);

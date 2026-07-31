@@ -25,19 +25,31 @@ final class Ax402_WC_Store_Onboarding
         $platform = $client->get_platform_config();
 
         if ($settings['api_id'] !== '') {
-            $api = $client->get_api($settings['api_id']);
-            $host = $settings['gateway_host'] !== ''
-                ? $settings['gateway_host']
-                : self::primary_hostname($api, $settings['api_slug'], $platform, $settings['network_mode']);
+            try {
+                $api = $client->get_api($settings['api_id']);
+                $host = $settings['gateway_host'] !== ''
+                    ? $settings['gateway_host']
+                    : self::primary_hostname($api, $settings['api_slug'], $platform, $settings['network_mode']);
 
-            $result = [
-                'api_id' => (string) $api['id'],
-                'gateway_host' => $host,
-                'gateway_url' => Ax402_WC_Platform_Tokens::gateway_base_url($host, $platform),
-                'api' => $api,
-            ];
-            Ax402_WC_Gateway_Cors::ensure_store_origins($result['api_id'], $client);
-            return $result;
+                $result = [
+                    'api_id' => (string) $api['id'],
+                    'gateway_host' => $host,
+                    'gateway_url' => Ax402_WC_Platform_Tokens::gateway_base_url($host, $platform),
+                    'api' => $api,
+                ];
+                Ax402_WC_Gateway_Cors::ensure_store_origins($result['api_id'], $client);
+                return $result;
+            } catch (RuntimeException $e) {
+                // Stale local api_id (deleted remotely, env swap, etc.) — recreate below.
+                if (stripos($e->getMessage(), 'api not found') === false) {
+                    throw $e;
+                }
+                Ax402_WC_Settings::update([
+                    'api_id' => '',
+                    'gateway_host' => '',
+                ]);
+                $settings = Ax402_WC_Settings::all();
+            }
         }
 
         $slug = $settings['api_slug'] !== ''
@@ -45,12 +57,30 @@ final class Ax402_WC_Store_Onboarding
             : 'wc-' . substr(hash('sha256', home_url()), 0, 10);
 
         $upstream = untrailingslashit(home_url());
-        $api = $client->create_api(
-            get_bloginfo('name') ?: 'WooCommerce Store',
-            $slug,
-            $upstream,
-            $settings['pay_to_address']
-        );
+        try {
+            $api = $client->create_api(
+                get_bloginfo('name') ?: 'WooCommerce Store',
+                $slug,
+                $upstream,
+                $settings['pay_to_address']
+            );
+        } catch (RuntimeException $e) {
+            // Reclaim an existing control-plane API when the local api_id was cleared
+            // but the slug is still registered (common after base URL / env swaps).
+            if (stripos($e->getMessage(), 'slug already exists') === false) {
+                throw $e;
+            }
+            $api = self::find_api_by_slug($client, $slug);
+            if ($api === null) {
+                throw $e;
+            }
+            $current_upstream = rtrim((string) ($api['upstream_base_url'] ?? ''), '/');
+            if ($current_upstream !== rtrim($upstream, '/')) {
+                $api = $client->update_api((string) $api['id'], [
+                    'upstream_base_url' => $upstream,
+                ]);
+            }
+        }
 
         $host = self::primary_hostname($api, $slug, $platform, $settings['network_mode']);
 
@@ -68,6 +98,23 @@ final class Ax402_WC_Store_Onboarding
         ];
         Ax402_WC_Gateway_Cors::ensure_store_origins($result['api_id'], $client);
         return $result;
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private static function find_api_by_slug(Ax402_WC_Control_Plane_Client $client, string $slug): ?array
+    {
+        foreach ($client->list_apis() as $api) {
+            if (!is_array($api)) {
+                continue;
+            }
+            if ((string) ($api['slug'] ?? '') === $slug) {
+                return $api;
+            }
+        }
+
+        return null;
     }
 
     /**
