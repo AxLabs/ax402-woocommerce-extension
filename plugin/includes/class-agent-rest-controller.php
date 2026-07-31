@@ -27,6 +27,18 @@ final class Ax402_WC_Agent_Rest_Controller
             'callback' => [$this, 'get_order'],
             'permission_callback' => '__return_true',
         ]);
+
+        register_rest_route('ax402/v1', '/orders/(?P<order_key>[A-Za-z0-9_-]+)/settlement', [
+            'methods' => WP_REST_Server::CREATABLE,
+            'callback' => [$this, 'select_settlement'],
+            'permission_callback' => '__return_true',
+            'args' => [
+                'order_key' => [
+                    'required' => true,
+                    'type' => 'string',
+                ],
+            ],
+        ]);
     }
 
     public function list_products(WP_REST_Request $request): WP_REST_Response
@@ -176,6 +188,49 @@ final class Ax402_WC_Agent_Rest_Controller
             'payment_url' => (string) $order->get_meta(Ax402_WC_Order_Payment::META_GATEWAY_URL),
             'thank_you_url' => $order->is_paid() ? $order->get_checkout_order_received_url() : null,
             'downloads' => $downloads,
+        ], 200);
+    }
+
+    public function select_settlement(WP_REST_Request $request): WP_REST_Response|WP_Error
+    {
+        $order_key = (string) $request['order_key'];
+        $order_id = wc_get_order_id_by_order_key($order_key);
+        if (!$order_id) {
+            return new WP_Error('ax402_not_found', 'Order not found', ['status' => 404]);
+        }
+
+        $order = wc_get_order($order_id);
+        if (!$order instanceof WC_Order) {
+            return new WP_Error('ax402_not_found', 'Order not found', ['status' => 404]);
+        }
+
+        if ($order->get_payment_method() !== Ax402_WC_Gateway_Ax402::GATEWAY_ID) {
+            return new WP_Error('ax402_invalid', 'Order is not an Ax402 payment', ['status' => 409]);
+        }
+
+        $body = $request->get_json_params();
+        if (!is_array($body)) {
+            $body = [];
+        }
+        $token_id = (string) ($body['tokenId'] ?? $body['token_id'] ?? $request->get_param('tokenId') ?? '');
+
+        try {
+            $locked = Ax402_WC_Order_Payment::lock_settlement_token($order, $token_id);
+        } catch (InvalidArgumentException $e) {
+            return new WP_Error('ax402_invalid', $e->getMessage(), ['status' => 400]);
+        } catch (Throwable $e) {
+            return new WP_Error('ax402_lock_failed', $e->getMessage(), ['status' => 500]);
+        }
+
+        return new WP_REST_Response([
+            'order_id' => $order->get_id(),
+            'order_key' => $order->get_order_key(),
+            'token_id' => $locked['token_id'],
+            'symbol' => $locked['symbol'],
+            'amount' => $locked['amount'],
+            'amount_atomic' => $locked['amount_atomic'],
+            'endpoint_id' => $locked['endpoint_id'],
+            'payment_url' => $locked['gateway_url'],
         ], 200);
     }
 }

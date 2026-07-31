@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
 	encodeBalanceOf,
 	formatPayLabel,
+	formatTokenAmount,
+	formatUsdExchangeRate,
 	hasSufficientBalance,
 	hexQuantityToDecimal,
 	networkMatches,
@@ -47,5 +49,24 @@ describe('encodeBalanceOf', () => {
 describe('formatPayLabel', () => {
 	it('joins amount and symbol', () => {
 		expect(formatPayLabel('1.5', 'USDC')).toBe('1.5 USDC');
+	});
+});
+
+describe('formatTokenAmount', () => {
+	it('trims long fractions', () => {
+		expect(formatTokenAmount('0.104671569852999163', 8)).toBe(
+			'0.10467156'
+		);
+		expect(formatTokenAmount('0.130000', 8)).toBe('0.13');
+		expect(formatTokenAmount('1', 8)).toBe('1');
+	});
+});
+
+describe('formatUsdExchangeRate', () => {
+	it('formats tokens-per-USD', () => {
+		expect(formatUsdExchangeRate('1', 'USDC')).toBe('1 USD = 1 USDC');
+		expect(formatUsdExchangeRate('0.806185921946147334', 'ZCHF')).toBe(
+			'1 USD = 0.80618592 ZCHF'
+		);
 	});
 });

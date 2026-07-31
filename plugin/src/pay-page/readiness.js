@@ -81,3 +81,47 @@ export function formatPayLabel(amount, symbol) {
 	const s = symbol || 'token';
 	return `${a} ${s}`.trim();
 }
+
+/**
+ * Trim long decimal strings for UI (keeps up to maxFrac significant fraction digits).
+ *
+ * @param {string|number|null|undefined} value
+ * @param {number} [maxFrac=8]
+ * @return {string}
+ */
+export function formatTokenAmount(value, maxFrac = 8) {
+	if (value == null || value === '') {
+		return '';
+	}
+	const raw = String(value).trim();
+	if (!/^-?\d+(\.\d+)?$/.test(raw)) {
+		return raw;
+	}
+	const neg = raw.startsWith('-');
+	const unsigned = neg ? raw.slice(1) : raw;
+	const [whole, frac = ''] = unsigned.split('.');
+	if (frac === '') {
+		return `${neg ? '-' : ''}${whole}`;
+	}
+	let trimmed = frac.slice(0, Math.max(0, maxFrac)).replace(/0+$/, '');
+	if (trimmed === '') {
+		return `${neg ? '-' : ''}${whole}`;
+	}
+	return `${neg ? '-' : ''}${whole}.${trimmed}`;
+}
+
+/**
+ * Settlement options store tokens-per-1-USD in `rate`.
+ *
+ * @param {string|number|null|undefined} tokensPerUsd
+ * @param {string} symbol
+ * @return {string}
+ */
+export function formatUsdExchangeRate(tokensPerUsd, symbol) {
+	const amount = formatTokenAmount(tokensPerUsd, 8);
+	const s = symbol || 'TOKEN';
+	if (!amount) {
+		return '';
+	}
+	return `1 USD = ${amount} ${s}`;
+}

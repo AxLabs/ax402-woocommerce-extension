@@ -20,7 +20,8 @@ final class Ax402_WC_Settings
      *   api_id:string,
      *   gateway_host:string,
      *   api_slug:string,
-     *   enabled_token_ids:list<string>
+     *   enabled_token_ids:list<string>,
+     *   settlement_reconcile:string
      * }
      */
     public static function all(): array
@@ -35,6 +36,7 @@ final class Ax402_WC_Settings
             'gateway_host' => '',
             'api_slug' => '',
             'enabled_token_ids' => [],
+            'settlement_reconcile' => 'yes',
         ];
 
         $stored = get_option(self::OPTION_KEY, []);
@@ -62,6 +64,11 @@ final class Ax402_WC_Settings
             $token_ids
         )));
 
+        $reconcile = strtolower((string) ($merged['settlement_reconcile'] ?? 'yes'));
+        if (!in_array($reconcile, ['yes', 'no'], true)) {
+            $reconcile = 'yes';
+        }
+
         return [
             'base_url' => (string) $merged['base_url'],
             'api_key' => (string) $merged['api_key'],
@@ -74,6 +81,7 @@ final class Ax402_WC_Settings
             'gateway_host' => (string) $merged['gateway_host'],
             'api_slug' => (string) $merged['api_slug'],
             'enabled_token_ids' => $token_ids,
+            'settlement_reconcile' => $reconcile,
         ];
     }
 
@@ -129,6 +137,9 @@ final class Ax402_WC_Settings
             'enabled_token_ids' => array_key_exists('enabled_token_ids', $input)
                 ? self::sanitize_token_ids($input['enabled_token_ids'])
                 : $current['enabled_token_ids'],
+            'settlement_reconcile' => self::sanitize_yes_no(
+                $input['settlement_reconcile'] ?? $current['settlement_reconcile']
+            ),
         ];
 
         $api_key = $current['api_key'];
@@ -160,6 +171,17 @@ final class Ax402_WC_Settings
             static fn ($id): string => sanitize_text_field((string) $id),
             $ids
         ))));
+    }
+
+    private static function sanitize_yes_no(mixed $value): string
+    {
+        $normalized = strtolower(trim((string) $value));
+        return $normalized === 'yes' ? 'yes' : 'no';
+    }
+
+    public static function settlement_reconcile_enabled(): bool
+    {
+        return self::all()['settlement_reconcile'] === 'yes';
     }
 
     public static function client(): ?Ax402_WC_Control_Plane_Client

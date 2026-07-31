@@ -23,10 +23,13 @@ final class Ax402_WC_Store_Onboarding
         }
 
         $platform = $client->get_platform_config();
+        // Ax402 proxies post-payment fulfill to this origin + endpoint path_pattern.
+        $upstream = untrailingslashit(home_url());
 
         if ($settings['api_id'] !== '') {
             try {
                 $api = $client->get_api($settings['api_id']);
+                $api = self::sync_upstream($client, $api, $upstream);
                 $host = $settings['gateway_host'] !== ''
                     ? $settings['gateway_host']
                     : self::primary_hostname($api, $settings['api_slug'], $platform, $settings['network_mode']);
@@ -56,7 +59,6 @@ final class Ax402_WC_Store_Onboarding
             ? $settings['api_slug']
             : 'wc-' . substr(hash('sha256', home_url()), 0, 10);
 
-        $upstream = untrailingslashit(home_url());
         try {
             $api = $client->create_api(
                 get_bloginfo('name') ?: 'WooCommerce Store',
@@ -74,12 +76,7 @@ final class Ax402_WC_Store_Onboarding
             if ($api === null) {
                 throw $e;
             }
-            $current_upstream = rtrim((string) ($api['upstream_base_url'] ?? ''), '/');
-            if ($current_upstream !== rtrim($upstream, '/')) {
-                $api = $client->update_api((string) $api['id'], [
-                    'upstream_base_url' => $upstream,
-                ]);
-            }
+            $api = self::sync_upstream($client, $api, $upstream);
         }
 
         $host = self::primary_hostname($api, $slug, $platform, $settings['network_mode']);
@@ -98,6 +95,33 @@ final class Ax402_WC_Store_Onboarding
         ];
         Ax402_WC_Gateway_Cors::ensure_store_origins($result['api_id'], $client);
         return $result;
+    }
+
+    /**
+     * Keep the Ax402 API upstream pointed at the live store origin (e.g. ngrok).
+     *
+     * @param array<string, mixed> $api
+     * @return array<string, mixed>
+     */
+    private static function sync_upstream(
+        Ax402_WC_Control_Plane_Client $client,
+        array $api,
+        string $upstream
+    ): array {
+        $api_id = (string) ($api['id'] ?? '');
+        if ($api_id === '') {
+            return $api;
+        }
+
+        $current = rtrim((string) ($api['upstream_base_url'] ?? ''), '/');
+        $wanted = rtrim($upstream, '/');
+        if ($current === $wanted) {
+            return $api;
+        }
+
+        return $client->update_api($api_id, [
+            'upstream_base_url' => $wanted,
+        ]);
     }
 
     /**

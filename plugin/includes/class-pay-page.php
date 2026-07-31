@@ -209,6 +209,7 @@ final class Ax402_WC_Pay_Page
             'network' => (string) ($primary['network'] ?? ''),
             'allowedAssets' => (string) ($primary['asset'] ?? ''),
             'statusUrl' => rest_url('ax402/v1/orders/' . $order_key),
+            'selectSettlementUrl' => rest_url('ax402/v1/orders/' . $order_key . '/settlement'),
             'thankYouUrl' => $order->get_checkout_order_received_url(),
             'orderUrl' => $order->get_checkout_order_received_url(),
             'payPageUrl' => Ax402_WC_Order_Payment::pay_page_url($order),
@@ -249,6 +250,11 @@ final class Ax402_WC_Pay_Page
         }
 
         try {
+            Ax402_WC_Order_Payment::ensure_current_settlement_options($order);
+            $order = wc_get_order($order->get_id());
+            if (!$order instanceof WC_Order) {
+                wp_die(esc_html__('Order not found.', 'ax402-woocommerce'), 404);
+            }
             $gateway_url = $this->resolve_gateway_url($order);
         } catch (Throwable $e) {
             wp_die(
@@ -454,7 +460,7 @@ final class Ax402_WC_Pay_Page
             margin: 0;
             padding: 0;
             display: grid;
-            gap: 0.5rem;
+            gap: 0.55rem;
         }
         .ax402-settle-option {
             width: 100%;
@@ -463,18 +469,51 @@ final class Ax402_WC_Pay_Page
             background: rgba(0,0,0,0.18);
             color: var(--ax402-text);
             border-radius: 12px;
-            padding: 0.7rem 0.85rem;
+            padding: 0.75rem 0.9rem;
             cursor: pointer;
-            display: flex;
-            flex-direction: column;
-            gap: 0.2rem;
+            display: grid;
+            gap: 0.28rem;
         }
         .ax402-settle-option.is-active {
             border-color: var(--ax402-accent);
             box-shadow: 0 0 0 1px rgba(124,255,178,0.35);
         }
-        .ax402-settle-symbol { font-weight: 700; }
-        .ax402-settle-meta { color: var(--ax402-muted); font-size: 0.88rem; }
+        .ax402-settle-top {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 0.75rem;
+        }
+        .ax402-settle-symbol {
+            font-weight: 700;
+            font-size: 1.05rem;
+            letter-spacing: 0.01em;
+        }
+        .ax402-settle-network {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+            color: var(--ax402-muted);
+            font-size: 0.78rem;
+            white-space: nowrap;
+        }
+        .ax402-settle-amount {
+            font-size: 0.98rem;
+            font-variant-numeric: tabular-nums;
+            color: var(--ax402-text);
+        }
+        .ax402-settle-rate {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.35rem;
+            color: var(--ax402-muted);
+            font-size: 0.8rem;
+            font-variant-numeric: tabular-nums;
+        }
+        .ax402-settle-glyph {
+            flex: 0 0 auto;
+            opacity: 0.85;
+        }
         .ax402-settle-option:disabled { cursor: default; opacity: 1; }
         .ax402-steps { margin-top: 0.25rem; }
         .ax402-step {

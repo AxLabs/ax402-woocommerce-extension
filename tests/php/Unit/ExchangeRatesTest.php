@@ -57,6 +57,36 @@ final class ExchangeRatesTest extends TestCase
         $this->assertEqualsWithDelta(1.0 / 0.999890948663, (float) $map['USDC|eip155:84532'], 1e-9);
     }
 
+    public function test_index_rates_handles_empty_payload(): void
+    {
+        $this->assertSame([], Ax402_WC_Control_Plane_Exchange_Rates::index_rates([
+            'quote' => 'usd',
+            'rates' => [],
+        ]));
+    }
+
+    public function test_control_plane_indexes_production_shaped_rates(): void
+    {
+        $map = Ax402_WC_Control_Plane_Exchange_Rates::index_rates([
+            'quote' => 'usd',
+            'rates' => [
+                [
+                    'symbol' => 'ZCHF',
+                    'network' => 'eip155:8453',
+                    'rate' => '1.2419800351',
+                ],
+                [
+                    'symbol' => 'XGAS',
+                    'network' => 'eip155:47763',
+                    'rate' => '0.93681244889',
+                ],
+            ],
+        ]);
+        $this->assertArrayHasKey('ZCHF|eip155:8453', $map);
+        $this->assertArrayHasKey('XGAS|eip155:47763', $map);
+        $this->assertEqualsWithDelta(1.0 / 1.2419800351, (float) $map['ZCHF|eip155:8453'], 1e-9);
+    }
+
     public function test_control_plane_client_provider_fetches_via_http(): void
     {
         $payload = (string) file_get_contents(dirname(__DIR__) . '/fixtures/exchange-rates.json');

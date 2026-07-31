@@ -30,22 +30,31 @@ final class ControlPlaneClientTest extends TestCase
         };
 
         $client = new Ax402_WC_Control_Plane_Client('https://api.test', 'key', $http);
+        $auth = [
+            'type' => 'header',
+            'header' => 'ngrok-skip-browser-warning',
+            'value' => '1',
+        ];
         $result = $client->upsert_endpoint(
             'api1',
             'GET',
             '/wp-json/ax402/v1/fulfill/k/t',
             [['scheme' => 'exact', 'network' => 'eip155:845320402', 'asset' => '0x1', 'amount' => '1000000']],
-            'order'
+            'order',
+            $auth
         );
 
         $this->assertSame('ep1', $result['id']);
         $this->assertSame('POST', $calls[1][0]);
         $this->assertSame('/wp-json/ax402/v1/fulfill/k/t', $calls[1][2]['path_pattern']);
+        $this->assertSame($auth, $calls[1][2]['upstream_auth']);
     }
 
     public function test_upsert_updates_when_exists(): void
     {
-        $http = static function (string $method, string $url, ?array $body): array {
+        $calls = [];
+        $http = static function (string $method, string $url, ?array $body) use (&$calls): array {
+            $calls[] = [$method, $url, $body];
             if ($method === 'GET' && str_ends_with($url, '/endpoints')) {
                 return [
                     'status' => 200,
@@ -68,14 +77,39 @@ final class ControlPlaneClientTest extends TestCase
         };
 
         $client = new Ax402_WC_Control_Plane_Client('https://api.test', 'key', $http);
+        $auth = [
+            'type' => 'header',
+            'header' => 'ngrok-skip-browser-warning',
+            'value' => '1',
+        ];
         $result = $client->upsert_endpoint(
             'api1',
             'GET',
             '/wp-json/ax402/v1/fulfill/k/t',
-            [['scheme' => 'exact', 'network' => 'eip155:845320402', 'asset' => '0x1', 'amount' => '2000000']]
+            [['scheme' => 'exact', 'network' => 'eip155:845320402', 'asset' => '0x1', 'amount' => '2000000']],
+            null,
+            $auth
         );
 
         $this->assertSame('ep9', $result['id']);
+        $this->assertSame($auth, $calls[1][2]['upstream_auth']);
+    }
+
+    public function test_upstream_auth_for_ngrok_base_url(): void
+    {
+        $this->assertSame(
+            [
+                'type' => 'header',
+                'header' => 'ngrok-skip-browser-warning',
+                'value' => '1',
+            ],
+            Ax402_WC_Control_Plane_Client::upstream_auth_for_base_url(
+                'https://chae-unleased-elaboratively.ngrok-free.dev'
+            )
+        );
+        $this->assertNull(
+            Ax402_WC_Control_Plane_Client::upstream_auth_for_base_url('https://shop.example.com')
+        );
     }
 
     public function test_find_endpoint_by_path(): void

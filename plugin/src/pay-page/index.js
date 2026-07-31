@@ -10,6 +10,8 @@ import '@ax402/react-paywall/styles.css';
 import { pollUntilPaid } from './poll-status';
 import {
 	formatPayLabel,
+	formatTokenAmount,
+	formatUsdExchangeRate,
 	hasSufficientBalance,
 	networkMatches,
 } from './readiness';
@@ -32,6 +34,64 @@ function shortAddress(address) {
 	return `${address.slice(0, 6)}…${address.slice(-4)}`;
 }
 
+function NetworkGlyph() {
+	return (
+		<svg
+			className="ax402-settle-glyph"
+			viewBox="0 0 16 16"
+			width="12"
+			height="12"
+			aria-hidden="true"
+			focusable="false"
+		>
+			<circle
+				cx="8"
+				cy="8"
+				r="6.25"
+				fill="none"
+				stroke="currentColor"
+				strokeWidth="1.4"
+			/>
+			<path
+				d="M2.2 8h11.6M8 1.75c1.7 1.85 2.55 3.85 2.55 6.25S9.7 12.4 8 14.25C6.3 12.4 5.45 10.4 5.45 8S6.3 3.6 8 1.75z"
+				fill="none"
+				stroke="currentColor"
+				strokeWidth="1.25"
+			/>
+		</svg>
+	);
+}
+
+function RateGlyph() {
+	return (
+		<svg
+			className="ax402-settle-glyph"
+			viewBox="0 0 16 16"
+			width="12"
+			height="12"
+			aria-hidden="true"
+			focusable="false"
+		>
+			<path
+				d="M3.5 5.5h7.2M8.2 3.2 10.8 5.5 8.2 7.8"
+				fill="none"
+				stroke="currentColor"
+				strokeWidth="1.4"
+				strokeLinecap="round"
+				strokeLinejoin="round"
+			/>
+			<path
+				d="M12.5 10.5H5.3M7.8 8.2 5.2 10.5 7.8 12.8"
+				fill="none"
+				stroke="currentColor"
+				strokeWidth="1.4"
+				strokeLinecap="round"
+				strokeLinejoin="round"
+			/>
+		</svg>
+	);
+}
+
 function SettlementPicker({ options, selectedId, onSelect }) {
 	if (!options.length) {
 		return null;
@@ -47,6 +107,11 @@ function SettlementPicker({ options, selectedId, onSelect }) {
 			<ul className="ax402-settle-list">
 				{options.map((option) => {
 					const active = option.tokenId === selectedId;
+					const amountLabel = formatTokenAmount(option.amount, 8);
+					const rateLabel = formatUsdExchangeRate(
+						option.rate,
+						option.symbol
+					);
 					return (
 						<li key={option.tokenId}>
 							<button
@@ -64,12 +129,26 @@ function SettlementPicker({ options, selectedId, onSelect }) {
 									}
 								}}
 							>
-								<span className="ax402-settle-symbol">
-									{option.symbol}
+								<span className="ax402-settle-top">
+									<span className="ax402-settle-symbol">
+										{option.symbol}
+									</span>
+									<span className="ax402-settle-network">
+										<NetworkGlyph />
+										{option.networkLabel ||
+											option.network ||
+											''}
+									</span>
 								</span>
-								<span className="ax402-settle-meta">
-									{option.amount} · {option.networkLabel}
+								<span className="ax402-settle-amount">
+									{amountLabel} {option.symbol}
 								</span>
+								{rateLabel ? (
+									<span className="ax402-settle-rate">
+										<RateGlyph />
+										{rateLabel}
+									</span>
+								) : null}
 							</button>
 						</li>
 					);
@@ -331,7 +410,7 @@ function PayStep({ config, option }) {
 	);
 }
 
-function PaymentSteps({ config, option }) {
+function PaymentSteps({ config, option, endpointReady, lockError }) {
 	const { walletAddress } = usePaywall();
 	const [chainId, setChainId] = useState(null);
 	const [balanceAtomic, setBalanceAtomic] = useState(null);
@@ -418,6 +497,29 @@ function PaymentSteps({ config, option }) {
 				balanceAtomic={balanceAtomic}
 			/>
 		);
+	} else if (lockError) {
+		step = (
+			<StepCard title="Could not prepare payment" description={lockError}>
+				<button
+					type="button"
+					className="ax402-primary-btn"
+					onClick={() => {
+						window.location.reload();
+					}}
+				>
+					Try again
+				</button>
+			</StepCard>
+		);
+	} else if (!endpointReady) {
+		step = (
+			<StepCard
+				title="Preparing payment…"
+				description="Setting the exact settlement amount for the selected token."
+			>
+				<div className="ax402-spinner" aria-hidden="true" />
+			</StepCard>
+		);
 	} else {
 		step = <PayStep config={config} option={option} />;
 	}
@@ -447,6 +549,8 @@ function PayApp() {
 	const [selectedId, setSelectedId] = useState(
 		() => options[0]?.tokenId || ''
 	);
+	const [endpointReady, setEndpointReady] = useState(false);
+	const [lockError, setLockError] = useState('');
 
 	useEffect(() => {
 		if (
@@ -459,6 +563,62 @@ function PayApp() {
 
 	const selected =
 		options.find((o) => o.tokenId === selectedId) || options[0] || null;
+
+	useEffect(() => {
+		if (!selected?.tokenId) {
+			setEndpointReady(false);
+			setLockError('');
+			return undefined;
+		}
+
+		const url = config.selectSettlementUrl;
+		if (!url) {
+			setEndpointReady(true);
+			setLockError('');
+			return undefined;
+		}
+
+		let cancelled = false;
+		setEndpointReady(false);
+		setLockError('');
+
+		(async () => {
+			try {
+				const res = await fetch(url, {
+					method: 'POST',
+					credentials: 'same-origin',
+					headers: {
+						Accept: 'application/json',
+						'Content-Type': 'application/json',
+					},
+					body: JSON.stringify({ tokenId: selected.tokenId }),
+				});
+				const data = await res.json().catch(() => ({}));
+				if (!res.ok) {
+					const msg =
+						data?.message ||
+						data?.code ||
+						`Could not lock settlement (${res.status})`;
+					throw new Error(msg);
+				}
+				if (!cancelled) {
+					setEndpointReady(true);
+				}
+			} catch (e) {
+				if (!cancelled) {
+					setEndpointReady(false);
+					setLockError(
+						e?.message ||
+							'Could not set the settlement amount on Ax402'
+					);
+				}
+			}
+		})();
+
+		return () => {
+			cancelled = true;
+		};
+	}, [selected?.tokenId, config.selectSettlementUrl]);
 
 	if (!gatewayUrl) {
 		return (
@@ -493,7 +653,10 @@ function PayApp() {
 					<div>
 						<span>You will pay</span>
 						<strong>
-							{formatPayLabel(selected.amount, selected.symbol)}
+							{formatPayLabel(
+								formatTokenAmount(selected.amount, 8),
+								selected.symbol
+							)}
 						</strong>
 					</div>
 				) : null}
@@ -504,7 +667,9 @@ function PayApp() {
 				onSelect={setSelectedId}
 			/>
 			<PaywallProvider
-				key={selected?.tokenId || 'default'}
+				key={`${selected?.tokenId || 'default'}-${
+					endpointReady ? 'ready' : 'locking'
+				}`}
 				policy={{
 					preferredNetworks: policyNetwork,
 					allowedAssets: policyAsset,
@@ -525,7 +690,12 @@ function PayApp() {
 					},
 				}}
 			>
-				<PaymentSteps config={config} option={selected} />
+				<PaymentSteps
+					config={config}
+					option={selected}
+					endpointReady={endpointReady}
+					lockError={lockError}
+				/>
 			</PaywallProvider>
 		</>
 	);

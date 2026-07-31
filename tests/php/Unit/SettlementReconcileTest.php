@@ -30,7 +30,7 @@ final class SettlementReconcileTest extends TestCase
         $this->assertSame('b', $rows[0]['endpoint_id']);
     }
 
-    public function test_find_matching_settlement(): void
+    public function test_find_matching_settlement_by_endpoint(): void
     {
         $settlements = [
             ['endpoint_id' => 'ep-1', 'amount' => '100', 'tx' => '0x1'],
@@ -42,10 +42,45 @@ final class SettlementReconcileTest extends TestCase
         $this->assertSame('0x2', $match['tx']);
 
         $this->assertNull(
-            Ax402_WC_Settlement_Reconcile::find_matching_settlement($settlements, 'ep-2', '999')
-        );
-        $this->assertNull(
             Ax402_WC_Settlement_Reconcile::find_matching_settlement($settlements, '', '200')
         );
+    }
+
+    public function test_find_matching_settlement_accepts_non_primary_amount(): void
+    {
+        // Order meta primary atomic is USDC; buyer paid ZCHF on the same endpoint.
+        $settlements = [
+            [
+                'endpoint_id' => 'ep-zchf',
+                'amount' => '130000000000000000',
+                'asset' => '0xc477AaB50E3b641f27c4814c1906864464Ad70D5',
+                'tx' => '0xabc',
+            ],
+        ];
+
+        $match = Ax402_WC_Settlement_Reconcile::find_matching_settlement(
+            $settlements,
+            'ep-zchf',
+            '130000' // primary USDC atomic — must not block
+        );
+        $this->assertNotNull($match);
+        $this->assertSame('0xabc', $match['tx']);
+    }
+
+    public function test_find_matching_settlement_prefers_acceptable_amount(): void
+    {
+        $settlements = [
+            ['endpoint_id' => 'ep-1', 'amount' => '999', 'tx' => '0xold'],
+            ['endpoint_id' => 'ep-1', 'amount' => '80759000000000000', 'tx' => '0xnew'],
+        ];
+
+        $match = Ax402_WC_Settlement_Reconcile::find_matching_settlement(
+            $settlements,
+            'ep-1',
+            '100300',
+            ['100300', '80759000000000000']
+        );
+        $this->assertNotNull($match);
+        $this->assertSame('0xnew', $match['tx']);
     }
 }

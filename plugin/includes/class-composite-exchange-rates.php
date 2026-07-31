@@ -20,8 +20,10 @@ final class Ax402_WC_Composite_Exchange_Rates implements Ax402_WC_Exchange_Rate_
     /**
      * Stablecoins stay 1:1; market tokens use the control-plane FX API when a client is available.
      */
-    public static function default(?Ax402_WC_Control_Plane_Client $client = null): self
-    {
+    public static function default(
+        ?Ax402_WC_Control_Plane_Client $client = null,
+        bool $force_refresh_fx = false
+    ): self {
         $providers = [new Ax402_WC_Stablecoin_One_To_One_Rates()];
 
         if ($client === null && function_exists('get_option')) {
@@ -29,7 +31,7 @@ final class Ax402_WC_Composite_Exchange_Rates implements Ax402_WC_Exchange_Rate_
         }
 
         if ($client !== null) {
-            $providers[] = new Ax402_WC_Control_Plane_Exchange_Rates($client);
+            $providers[] = new Ax402_WC_Control_Plane_Exchange_Rates($client, $force_refresh_fx);
         } else {
             $providers[] = new Ax402_WC_Stub_Market_Rates();
         }

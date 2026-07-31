@@ -18,9 +18,23 @@ final class Ax402_WC_Control_Plane_Exchange_Rates implements Ax402_WC_Exchange_R
 
     private bool $loaded = false;
 
-    public function __construct(Ax402_WC_Control_Plane_Client $client)
+    private bool $force_refresh;
+
+    public function __construct(Ax402_WC_Control_Plane_Client $client, bool $force_refresh = false)
     {
         $this->client = $client;
+        $this->force_refresh = $force_refresh;
+    }
+
+    /**
+     * Drop the WordPress transient so the next lookup hits /exchange-rates.
+     */
+    public static function clear_cache_for_base_url(string $base_url): void
+    {
+        if (!function_exists('delete_transient')) {
+            return;
+        }
+        delete_transient(self::cache_key_for_base_url($base_url));
     }
 
     public function rate_usd_to_token(string $symbol, string $network): ?string
@@ -30,7 +44,7 @@ final class Ax402_WC_Control_Plane_Exchange_Rates implements Ax402_WC_Exchange_R
             return null;
         }
 
-        $key = $this->lookup_key($symbol, $network);
+        $key = self::lookup_key($symbol, $network);
         return $this->tokens_per_usd[$key] ?? null;
     }
 
@@ -61,10 +75,16 @@ final class Ax402_WC_Control_Plane_Exchange_Rates implements Ax402_WC_Exchange_R
         }
         $this->loaded = true;
 
-        $cached = $this->read_cache();
-        if ($cached !== null) {
-            $this->tokens_per_usd = $cached;
-            return;
+        if (!$this->force_refresh) {
+            $cached = $this->read_cache();
+            // Empty maps are treated as a miss: production previously returned
+            // rates:[] and we must not keep that snapshot for the full TTL.
+            if ($cached !== null && $cached !== []) {
+                $this->tokens_per_usd = $cached;
+                return;
+            }
+        } else {
+            self::clear_cache_for_base_url($this->client->base_url());
         }
 
         try {
@@ -76,7 +96,9 @@ final class Ax402_WC_Control_Plane_Exchange_Rates implements Ax402_WC_Exchange_R
 
         $map = self::index_rates($payload);
         $this->tokens_per_usd = $map;
-        $this->write_cache($map);
+        if ($map !== []) {
+            $this->write_cache($map);
+        }
     }
 
     /**
@@ -124,7 +146,7 @@ final class Ax402_WC_Control_Plane_Exchange_Rates implements Ax402_WC_Exchange_R
         if (!function_exists('get_transient')) {
             return null;
         }
-        $cached = get_transient($this->cache_key());
+        $cached = get_transient(self::cache_key_for_base_url($this->client->base_url()));
         return is_array($cached) ? $cached : null;
     }
 
@@ -136,11 +158,15 @@ final class Ax402_WC_Control_Plane_Exchange_Rates implements Ax402_WC_Exchange_R
         if (!function_exists('set_transient')) {
             return;
         }
-        set_transient($this->cache_key(), $map, self::CACHE_TTL_SECONDS);
+        set_transient(
+            self::cache_key_for_base_url($this->client->base_url()),
+            $map,
+            self::CACHE_TTL_SECONDS
+        );
     }
 
-    private function cache_key(): string
+    private static function cache_key_for_base_url(string $base_url): string
     {
-        return 'ax402_wc_fx_usd_' . md5($this->client->base_url());
+        return 'ax402_wc_fx_usd_' . md5(rtrim($base_url, '/'));
     }
 }

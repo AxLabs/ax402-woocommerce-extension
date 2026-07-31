@@ -12,18 +12,39 @@ final class Ax402_WC_Settlement_Reconcile
     private const TRANSIENT_TTL = 15;
 
     /**
+     * Match an Ax402 settlement to a prepared order endpoint.
+     *
+     * Endpoint id is authoritative: each order prep creates a unique Ax402
+     * endpoint. Do not require META_AMOUNT_ATOMIC (primary/USDC) to equal the
+     * settlement amount — buyers may pay any accept (ZCHF, XGAS, …), and the
+     * gateway may record a divergent atomic for 18-decimal assets.
+     *
      * @param list<array<string, mixed>> $settlements
+     * @param list<string> $acceptable_amounts optional hint; preferred when several rows share an endpoint
      * @return array<string, mixed>|null
      */
     public static function find_matching_settlement(
         array $settlements,
         string $endpoint_id,
-        string $amount_atomic = ''
+        string $amount_atomic = '',
+        array $acceptable_amounts = []
     ): ?array {
         if ($endpoint_id === '') {
             return null;
         }
 
+        $amounts = [];
+        foreach ($acceptable_amounts as $a) {
+            $a = (string) $a;
+            if ($a !== '') {
+                $amounts[$a] = true;
+            }
+        }
+        if ($amount_atomic !== '') {
+            $amounts[$amount_atomic] = true;
+        }
+
+        $fallback = null;
         foreach ($settlements as $row) {
             if (!is_array($row)) {
                 continue;
@@ -31,14 +52,16 @@ final class Ax402_WC_Settlement_Reconcile
             if ((string) ($row['endpoint_id'] ?? '') !== $endpoint_id) {
                 continue;
             }
-            if ($amount_atomic !== '' && (string) ($row['amount'] ?? '') !== $amount_atomic) {
-                continue;
+
+            $settled = (string) ($row['amount'] ?? '');
+            if ($amounts !== [] && isset($amounts[$settled])) {
+                return $row;
             }
 
-            return $row;
+            $fallback ??= $row;
         }
 
-        return null;
+        return $fallback;
     }
 
     /**
@@ -72,6 +95,10 @@ final class Ax402_WC_Settlement_Reconcile
         WC_Order $order,
         ?Ax402_WC_Control_Plane_Client $client = null
     ): bool {
+        if (!Ax402_WC_Settings::settlement_reconcile_enabled()) {
+            return false;
+        }
+
         if ($order->is_paid()) {
             return true;
         }
@@ -100,7 +127,9 @@ final class Ax402_WC_Settlement_Reconcile
         }
 
         try {
-            $settlements = self::fetch_settlements($client, $settings['api_id']);
+            // Always refresh during reconcile so pay-page status polls see new
+            // settlements within ~1s instead of waiting out the transient TTL.
+            $settlements = self::fetch_settlements($client, $settings['api_id'], true);
         } catch (Throwable $e) {
             $order->add_order_note('Ax402 settlement reconcile failed: ' . $e->getMessage());
             $order->save();
@@ -108,7 +137,23 @@ final class Ax402_WC_Settlement_Reconcile
         }
 
         $amount_atomic = (string) $order->get_meta(Ax402_WC_Order_Payment::META_AMOUNT_ATOMIC);
-        $match = self::find_matching_settlement($settlements, $endpoint_id, $amount_atomic);
+        $acceptable = [];
+        foreach (Ax402_WC_Order_Payment::settlement_options_from_order($order) as $option) {
+            if (!is_array($option)) {
+                continue;
+            }
+            $atomic = (string) ($option['amountAtomic'] ?? $option['amount_atomic'] ?? '');
+            if ($atomic !== '') {
+                $acceptable[] = $atomic;
+            }
+        }
+
+        $match = self::find_matching_settlement(
+            $settlements,
+            $endpoint_id,
+            $amount_atomic,
+            $acceptable
+        );
         if ($match === null) {
             return false;
         }
@@ -145,12 +190,15 @@ final class Ax402_WC_Settlement_Reconcile
      */
     private static function fetch_settlements(
         Ax402_WC_Control_Plane_Client $client,
-        string $api_id
+        string $api_id,
+        bool $bypass_cache = false
     ): array {
         $cache_key = 'ax402_wc_settlements_' . md5($api_id);
-        $cached = get_transient($cache_key);
-        if (is_array($cached)) {
-            return self::normalize_settlements_payload($cached);
+        if (!$bypass_cache) {
+            $cached = get_transient($cache_key);
+            if (is_array($cached)) {
+                return self::normalize_settlements_payload($cached);
+            }
         }
 
         $rows = $client->list_settlements($api_id);

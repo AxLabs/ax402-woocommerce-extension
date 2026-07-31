@@ -120,6 +120,19 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
                 ),
                 'default' => $plugin['api_slug'],
             ],
+            'settlement_reconcile' => [
+                'title' => __('Settlement reconcile', 'ax402-woocommerce'),
+                'type' => 'checkbox',
+                'label' => __(
+                    'Complete unpaid orders from Ax402 settlements when gateway fulfill is missing',
+                    'ax402-woocommerce'
+                ),
+                'description' => __(
+                    'When enabled, pay-page status polls mark the order paid if Ax402 already recorded an on-chain settlement but never called the store fulfill URL (common with tunnels). Disable this to test upstream fulfill alone — orders will stay pending until the gateway hits your shop.',
+                    'ax402-woocommerce'
+                ),
+                'default' => ($plugin['settlement_reconcile'] ?? 'yes') === 'yes' ? 'yes' : 'no',
+            ],
         ];
     }
 
@@ -212,6 +225,9 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
             if (!$sync['ok'] && $sync['error'] !== '') {
                 $sync_error = $sync['error'];
             }
+            // Bust FX cache on every settings render so ZCHF/XGAS pick up new
+            // /exchange-rates data (previously an empty rates:[] could stick for 5m).
+            Ax402_WC_Control_Plane_Exchange_Rates::clear_cache_for_base_url($current_base);
         }
 
         $cache = Ax402_WC_Platform_Config_Store::get();
@@ -240,7 +256,7 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
             );
             $selected = array_values(array_intersect($selected, $valid_ids));
         }
-        $rates = Ax402_WC_Composite_Exchange_Rates::default();
+        $rates = Ax402_WC_Composite_Exchange_Rates::default(null, true);
         $display_error = $sync_error !== '' ? $sync_error : (string) ($cache['error'] ?? '');
 
         ob_start();
@@ -331,7 +347,19 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
                                                 );
                                                 ?>
                                                 <?php if ($rate_ok) : ?>
-                                                    · <?php echo esc_html__('rate OK', 'ax402-woocommerce'); ?>
+                                                    · <?php
+                                                    if (Ax402_WC_Stablecoin_One_To_One_Rates::is_stablecoin($symbol)) {
+                                                        echo esc_html__('rate OK (1:1 USD)', 'ax402-woocommerce');
+                                                    } else {
+                                                        echo esc_html(
+                                                            sprintf(
+                                                                /* translators: %s: tokens per 1 USD */
+                                                                __('rate OK (%s / USD)', 'ax402-woocommerce'),
+                                                                $rate
+                                                            )
+                                                        );
+                                                    }
+                                                    ?>
                                                 <?php else : ?>
                                                     · <span style="color:#b32d2e"><?php echo esc_html__('rate unavailable', 'ax402-woocommerce'); ?></span>
                                                 <?php endif; ?>
@@ -357,7 +385,7 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
                 </p>
                 <p class="description" style="margin-top:0">
                     <?php echo esc_html__(
-                        'This list is loaded live from Ax402 /config/platform when you open this page. It also refreshes when you change the API base URL or API key and save.',
+                        'Tokens load from Ax402 /config/platform; USD rates load from /exchange-rates. Both refresh when you open this page (and when you change API base URL / API key and save). Stablecoins use 1:1; ZCHF, XGAS, and other market tokens need a live FX row.',
                         'ax402-woocommerce'
                     ); ?>
                 </p>
@@ -399,6 +427,7 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
             'network_mode' => (string) $this->get_option('network_mode', 'sepolia'),
             'api_slug' => (string) $this->get_option('api_slug', ''),
             'enabled_token_ids' => $this->get_option('settlement_tokens', []),
+            'settlement_reconcile' => $this->get_option('settlement_reconcile', 'yes') === 'yes' ? 'yes' : 'no',
         ];
 
         if (!is_array($payload['enabled_token_ids'])) {

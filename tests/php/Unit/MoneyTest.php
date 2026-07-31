@@ -37,7 +37,35 @@ final class MoneyTest extends TestCase
     public function test_usd_to_token_amount_one_to_one(): void
     {
         $amount = Ax402_WC_Money::usd_to_token_amount('22.500000', '1', 6);
-        $this->assertSame('22.500000', $amount);
+        $this->assertSame('22.5', $amount);
         $this->assertSame('22500000', Ax402_WC_Money::to_atomic($amount, 6));
+    }
+
+    public function test_usd_to_token_amount_caps_fraction_for_18_decimals(): void
+    {
+        $amount = Ax402_WC_Money::usd_to_token_amount('0.130000', '0.805165921946147', 18);
+        $this->assertMatchesRegularExpression('/^\d+(\.\d{1,6})?$/', $amount);
+        $frac = explode('.', $amount, 2)[1] ?? '';
+        $this->assertLessThanOrEqual(6, strlen($frac));
+
+        $atomic = Ax402_WC_Money::to_atomic($amount, 18);
+        $this->assertMatchesRegularExpression('/^\d+$/', $atomic);
+        // Atomic must encode at most 6 human fraction digits (trailing 12 zeros).
+        $this->assertTrue(str_ends_with($atomic, '000000000000'));
+    }
+
+    public function test_cap_fraction_digits_rounds_up(): void
+    {
+        $this->assertSame(
+            '0.104672',
+            Ax402_WC_Money::cap_fraction_digits('0.104671569852999163', 6)
+        );
+        // Any discarded non-zero digit must bump (unlike half-up).
+        $this->assertSame(
+            '0.104672',
+            Ax402_WC_Money::cap_fraction_digits('0.1046711', 6)
+        );
+        $this->assertSame('1.000001', Ax402_WC_Money::cap_fraction_digits('1.0000001', 6));
+        $this->assertSame('0.13', Ax402_WC_Money::cap_fraction_digits('0.130000', 6));
     }
 }

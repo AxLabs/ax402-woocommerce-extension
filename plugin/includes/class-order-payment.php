@@ -17,6 +17,7 @@ final class Ax402_WC_Order_Payment
     public const META_NETWORK = '_ax402_network';
     public const META_PATH = '_ax402_path_pattern';
     public const META_SETTLEMENT_OPTIONS = '_ax402_settlement_options';
+    public const META_SELECTED_TOKEN_ID = '_ax402_selected_token_id';
 
     /**
      * Prepare Ax402 payment for a WooCommerce order.
@@ -50,6 +51,7 @@ final class Ax402_WC_Order_Payment
 
         $amount_usd = Ax402_WC_Money::normalize_order_total($order->get_total());
         $token_ids = Ax402_WC_Settings::enabled_token_ids($platform);
+        Ax402_WC_Control_Plane_Exchange_Rates::clear_cache_for_base_url($settings['base_url']);
         $options = Ax402_WC_Platform_Tokens::build_settlement_options(
             $platform,
             $token_ids,
@@ -76,12 +78,17 @@ final class Ax402_WC_Order_Payment
         $order_key = $order->get_order_key();
         $path = self::fulfill_path($order_key, $fulfill_token);
 
+        $upstream_auth = Ax402_WC_Control_Plane_Client::upstream_auth_for_base_url(
+            (string) ($onboarded['api']['upstream_base_url'] ?? home_url())
+        );
+
         $endpoint = $client->upsert_endpoint(
             $onboarded['api_id'],
             'GET',
             $path,
             $accepts,
-            'WooCommerce order #' . $order->get_id()
+            'WooCommerce order #' . $order->get_id(),
+            $upstream_auth
         );
 
         $gateway_url = Ax402_WC_Platform_Tokens::gateway_url($onboarded['gateway_host'], $path, $platform);
@@ -125,6 +132,222 @@ final class Ax402_WC_Order_Payment
             'fulfill_token' => $fulfill_token,
             'settlement_options' => $display_options,
         ];
+    }
+
+    /**
+     * Re-prepare payment when admin-enabled tokens (with rates) differ from order meta.
+     *
+     * Checkout may have frozen a single-token snapshot before the merchant enabled
+     * ZCHF/XGAS; the pay page must show the current selectable set and update the
+     * Ax402 endpoint accepts[] accordingly.
+     */
+    public static function ensure_current_settlement_options(
+        WC_Order $order,
+        ?Ax402_WC_Control_Plane_Client $client = null
+    ): void {
+        if ($order->is_paid()) {
+            return;
+        }
+
+        $settings = Ax402_WC_Settings::all();
+        $client ??= Ax402_WC_Settings::client();
+        if ($client === null) {
+            return;
+        }
+
+        Ax402_WC_Control_Plane_Exchange_Rates::clear_cache_for_base_url($settings['base_url']);
+
+        try {
+            $platform = $client->get_platform_config();
+            Ax402_WC_Platform_Config_Store::store($platform);
+        } catch (Throwable $e) {
+            $platform = Ax402_WC_Platform_Config_Store::platform_or_sync();
+        }
+
+        if ($platform === []) {
+            return;
+        }
+
+        $token_ids = Ax402_WC_Settings::enabled_token_ids($platform);
+        $amount_usd = Ax402_WC_Money::normalize_order_total($order->get_total());
+        $live = Ax402_WC_Platform_Tokens::build_settlement_options(
+            $platform,
+            $token_ids,
+            $amount_usd,
+            $settings['scheme']
+        );
+        $live_ids = self::sorted_token_ids_from_built($live);
+        $stored_ids = self::sorted_token_ids_from_meta(
+            self::settlement_options_from_order($order)
+        );
+
+        $gateway_url = (string) $order->get_meta(self::META_GATEWAY_URL);
+        if ($live_ids !== [] && $live_ids === $stored_ids && $gateway_url !== '') {
+            return;
+        }
+
+        self::prepare($order, $client);
+    }
+
+    /**
+     * Narrow the Ax402 endpoint to a single settlement token at its FX amount.
+     *
+     * The Ax402 gateway rewrites Base non-USDC accepts to USD×10^decimals when
+     * multiple accepts share the Base network (ZCHF becomes "USD as ZCHF").
+     * Human checkout therefore locks one accept — the converted token amount —
+     * before the wallet paywall inspects the gateway URL.
+     *
+     * @return array{
+     *   token_id:string,
+     *   symbol:string,
+     *   amount:string,
+     *   amount_atomic:string,
+     *   endpoint_id:string,
+     *   gateway_url:string
+     * }
+     */
+    public static function lock_settlement_token(
+        WC_Order $order,
+        string $token_id,
+        ?Ax402_WC_Control_Plane_Client $client = null
+    ): array {
+        if ($order->is_paid()) {
+            throw new RuntimeException('Order is already paid');
+        }
+
+        if (!Ax402_WC_Fulfill_Auth::can_fulfill_status($order->get_status())) {
+            throw new RuntimeException('Order cannot accept payment in status ' . $order->get_status());
+        }
+
+        $token_id = trim($token_id);
+        if ($token_id === '') {
+            throw new InvalidArgumentException('tokenId is required');
+        }
+
+        $settings = Ax402_WC_Settings::all();
+        $client ??= Ax402_WC_Settings::client();
+        if ($client === null) {
+            throw new RuntimeException('Ax402 is not configured');
+        }
+
+        $options = self::settlement_options_from_order($order);
+        if ($options === []) {
+            self::ensure_current_settlement_options($order, $client);
+            $options = self::settlement_options_from_order($order);
+        }
+
+        $selected = null;
+        foreach ($options as $option) {
+            if ((string) ($option['tokenId'] ?? '') === $token_id) {
+                $selected = $option;
+                break;
+            }
+        }
+        if ($selected === null) {
+            throw new InvalidArgumentException('Settlement token is not available for this order');
+        }
+
+        $atomic = (string) ($selected['amountAtomic'] ?? '');
+        if ($atomic === '' || !preg_match('/^\d+$/', $atomic)) {
+            throw new RuntimeException('Invalid settlement amount for token');
+        }
+
+        $path = (string) $order->get_meta(self::META_PATH);
+        if ($path === '' || (string) $order->get_meta(self::META_GATEWAY_URL) === '') {
+            self::prepare($order, $client);
+            $path = (string) $order->get_meta(self::META_PATH);
+            $options = self::settlement_options_from_order($order);
+            foreach ($options as $option) {
+                if ((string) ($option['tokenId'] ?? '') === $token_id) {
+                    $selected = $option;
+                    $atomic = (string) ($selected['amountAtomic'] ?? $atomic);
+                    break;
+                }
+            }
+        }
+
+        $onboarded = Ax402_WC_Store_Onboarding::ensure_api($client);
+        $platform = $client->get_platform_config();
+        Ax402_WC_Platform_Config_Store::store($platform);
+
+        $token = Ax402_WC_Platform_Tokens::find_token_by_id($platform, $token_id);
+        if ($token === null) {
+            throw new RuntimeException('Settlement token was not found on the Ax402 platform');
+        }
+
+        $accept = Ax402_WC_Platform_Tokens::build_accept($token, $atomic, $settings['scheme']);
+        $symbol = (string) ($selected['symbol'] ?? $token['symbol'] ?? 'TOKEN');
+
+        $upstream_auth = Ax402_WC_Control_Plane_Client::upstream_auth_for_base_url(
+            (string) ($onboarded['api']['upstream_base_url'] ?? home_url())
+        );
+
+        $endpoint = $client->upsert_endpoint(
+            $onboarded['api_id'],
+            'GET',
+            $path,
+            [$accept],
+            'WooCommerce order #' . $order->get_id() . ' (' . $symbol . ')',
+            $upstream_auth
+        );
+
+        $gateway_url = Ax402_WC_Platform_Tokens::gateway_url(
+            $onboarded['gateway_host'],
+            $path,
+            $platform
+        );
+
+        $order->update_meta_data(self::META_SELECTED_TOKEN_ID, $token_id);
+        $order->update_meta_data(self::META_ENDPOINT_ID, (string) ($endpoint['id'] ?? ''));
+        $order->update_meta_data(self::META_GATEWAY_URL, $gateway_url);
+        $order->update_meta_data(self::META_AMOUNT_ATOMIC, $atomic);
+        $order->update_meta_data(self::META_NETWORK, (string) ($selected['network'] ?? $token['network'] ?? ''));
+        $order->save();
+
+        return [
+            'token_id' => $token_id,
+            'symbol' => $symbol,
+            'amount' => (string) ($selected['amount'] ?? ''),
+            'amount_atomic' => $atomic,
+            'endpoint_id' => (string) ($endpoint['id'] ?? ''),
+            'gateway_url' => $gateway_url,
+        ];
+    }
+
+    /**
+     * @param list<array<string,mixed>> $options
+     * @return list<string>
+     */
+    private static function sorted_token_ids_from_built(array $options): array
+    {
+        $ids = [];
+        foreach ($options as $option) {
+            $id = (string) ($option['token_id'] ?? '');
+            if ($id !== '') {
+                $ids[] = $id;
+            }
+        }
+        sort($ids, SORT_STRING);
+
+        return $ids;
+    }
+
+    /**
+     * @param list<array<string,mixed>> $options
+     * @return list<string>
+     */
+    private static function sorted_token_ids_from_meta(array $options): array
+    {
+        $ids = [];
+        foreach ($options as $option) {
+            $id = (string) ($option['tokenId'] ?? '');
+            if ($id !== '') {
+                $ids[] = $id;
+            }
+        }
+        sort($ids, SORT_STRING);
+
+        return $ids;
     }
 
     /**

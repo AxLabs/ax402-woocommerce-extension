@@ -9,6 +9,12 @@ final class Ax402_WC_Money
     public const USDC_DECIMALS = 6;
 
     /**
+     * Ax402 gateway rejects payment amounts with more than 6 fractional digits
+     * (even when the token itself has 18 decimals).
+     */
+    public const GATEWAY_MAX_FRACTION_DIGITS = 6;
+
+    /**
      * Convert a decimal amount string to atomic units for the given decimals.
      *
      * @throws InvalidArgumentException
@@ -36,6 +42,54 @@ final class Ax402_WC_Money
         }
 
         return $atomic;
+    }
+
+    /**
+     * Cap a decimal amount to at most $max_fraction digits, always rounding up
+     * when any discarded digit is non-zero (ceiling).
+     *
+     * @throws InvalidArgumentException
+     */
+    public static function cap_fraction_digits(
+        string $amount,
+        int $max_fraction = self::GATEWAY_MAX_FRACTION_DIGITS
+    ): string {
+        if ($max_fraction < 0 || $max_fraction > 18) {
+            throw new InvalidArgumentException('Invalid fraction digit limit');
+        }
+
+        $trimmed = trim($amount);
+        if ($trimmed === '' || !preg_match('/^\d+(\.\d+)?$/', $trimmed)) {
+            throw new InvalidArgumentException('Enter a valid amount (e.g. 0.10)');
+        }
+
+        if (!str_contains($trimmed, '.')) {
+            return $trimmed;
+        }
+
+        [$whole, $frac] = explode('.', $trimmed, 2);
+        if (strlen($frac) <= $max_fraction) {
+            $clean = rtrim(rtrim($trimmed, '0'), '.');
+
+            return $clean === '' ? '0' : $clean;
+        }
+
+        // Ceiling via integer math: bump whenever any truncated digit is non-zero.
+        $keep = substr($frac, 0, $max_fraction);
+        $rest = substr($frac, $max_fraction);
+        $base = ltrim($whole . $keep, '0');
+        if ($base === '') {
+            $base = '0';
+        }
+        if (ltrim($rest, '0') !== '') {
+            $base = (string) ((int) $base + 1);
+        }
+
+        $padded = str_pad($base, $max_fraction + 1, '0', STR_PAD_LEFT);
+        $out_whole = ltrim(substr($padded, 0, -$max_fraction), '0') ?: '0';
+        $out_frac = rtrim(substr($padded, -$max_fraction), '0');
+
+        return $out_frac !== '' ? $out_whole . '.' . $out_frac : $out_whole;
     }
 
     /**
@@ -93,6 +147,9 @@ final class Ax402_WC_Money
     /**
      * Multiply USD amount by a token-per-USD rate (decimal strings).
      *
+     * Result is capped to {@see GATEWAY_MAX_FRACTION_DIGITS} (rounded up) so
+     * Ax402 accepts[] stay valid for 18-decimal tokens (ZCHF, XGAS, …).
+     *
      * @throws InvalidArgumentException
      */
     public static function usd_to_token_amount(string $usd_amount, string $rate, int $decimals): string
@@ -104,7 +161,10 @@ final class Ax402_WC_Money
             throw new InvalidArgumentException('Rate must be greater than 0');
         }
 
+        $precision = min(max($decimals, 0), self::GATEWAY_MAX_FRACTION_DIGITS);
         $product = (float) $usd_amount * (float) $rate;
-        return number_format($product, $decimals, '.', '');
+        $formatted = number_format($product, max($decimals, $precision), '.', '');
+
+        return self::cap_fraction_digits($formatted, $precision);
     }
 }

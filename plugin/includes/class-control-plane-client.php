@@ -185,6 +185,7 @@ final class Ax402_WC_Control_Plane_Client
 
     /**
      * @param list<array<string, mixed>> $accepts
+     * @param array{type:string,header?:string,value?:string}|null $upstream_auth
      * @return array<string, mixed>
      */
     public function create_endpoint(
@@ -193,6 +194,7 @@ final class Ax402_WC_Control_Plane_Client
         string $path_pattern,
         array $accepts,
         ?string $description = null,
+        ?array $upstream_auth = null,
     ): array {
         $body = [
             'method' => strtoupper($method),
@@ -201,6 +203,9 @@ final class Ax402_WC_Control_Plane_Client
         ];
         if ($description !== null) {
             $body['description'] = $description;
+        }
+        if ($upstream_auth !== null) {
+            $body['upstream_auth'] = $upstream_auth;
         }
 
         $result = $this->request('POST', '/apis/' . rawurlencode($api_id) . '/endpoints', $body);
@@ -216,6 +221,7 @@ final class Ax402_WC_Control_Plane_Client
 
     /**
      * @param list<array<string, mixed>> $accepts
+     * @param array{type:string,header?:string,value?:string}|null $upstream_auth
      * @return array<string, mixed>
      */
     public function update_endpoint(
@@ -226,6 +232,7 @@ final class Ax402_WC_Control_Plane_Client
         array $accepts,
         bool $enabled = true,
         ?string $description = null,
+        ?array $upstream_auth = null,
     ): array {
         $body = [
             'method' => strtoupper($method),
@@ -235,6 +242,9 @@ final class Ax402_WC_Control_Plane_Client
         ];
         if ($description !== null) {
             $body['description'] = $description;
+        }
+        if ($upstream_auth !== null) {
+            $body['upstream_auth'] = $upstream_auth;
         }
 
         $result = $this->request(
@@ -365,6 +375,7 @@ final class Ax402_WC_Control_Plane_Client
 
     /**
      * @param list<array<string, mixed>> $accepts
+     * @param array{type:string,header?:string,value?:string}|null $upstream_auth
      * @return array<string, mixed>
      */
     public function upsert_endpoint(
@@ -373,6 +384,7 @@ final class Ax402_WC_Control_Plane_Client
         string $path_pattern,
         array $accepts,
         ?string $description = null,
+        ?array $upstream_auth = null,
     ): array {
         $existing = self::find_endpoint_by_path($this->list_endpoints($api_id), $method, $path_pattern);
         if ($existing !== null && !empty($existing['id'])) {
@@ -383,11 +395,40 @@ final class Ax402_WC_Control_Plane_Client
                 $path_pattern,
                 $accepts,
                 true,
-                $description
+                $description,
+                $upstream_auth
             );
         }
 
-        return $this->create_endpoint($api_id, $method, $path_pattern, $accepts, $description);
+        return $this->create_endpoint(
+            $api_id,
+            $method,
+            $path_pattern,
+            $accepts,
+            $description,
+            $upstream_auth
+        );
+    }
+
+    /**
+     * Header the gateway should inject on upstream requests (SDK UpstreamAuthInput).
+     *
+     * Free ngrok serves ERR_NGROK_6024 to non-browser clients unless this header is present.
+     *
+     * @return array{type:string,header:string,value:string}|null
+     */
+    public static function upstream_auth_for_base_url(string $base_url): ?array
+    {
+        $host = (string) (parse_url($base_url, PHP_URL_HOST) ?: '');
+        if ($host === '' || stripos($host, 'ngrok') === false) {
+            return null;
+        }
+
+        return [
+            'type' => 'header',
+            'header' => 'ngrok-skip-browser-warning',
+            'value' => '1',
+        ];
     }
 
     /**
