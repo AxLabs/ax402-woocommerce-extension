@@ -238,7 +238,8 @@ ax402-woocommerce-extension/
 | Prices show `$0.00` for `$0.001` | 2 decimal places | Seed sets 4 decimals; enable Ax402 (plugin also raises display decimals) |
 | Pay page “Missing gateway URL” | Endpoint prep failed / meta missing | Check API key, network asset enabled, WP debug log |
 | Browser CORS to `*.ax402.io` | Direct browser fetch | Plugin auto-adds store origin via `/apis/{id}/cors` (gateway binary must support per-API CORS) |
-| Gateway cannot fulfill | Upstream is localhost | Use ngrok/tunnel + update `WP_HOME` / Ax402 `upstream_base_url` |
+| Gateway cannot fulfill | Upstream is localhost, or free ngrok interstitial (`ERR_NGROK_6024`) | Use a public tunnel + matching `WP_HOME` / `upstream_base_url`. Plugin adds `ngrok-skip-browser-warning` via endpoint `upstream_auth` when the host contains `ngrok` — see [architecture.md](architecture.md). |
+| Paid on-chain but order stays pending | Upstream miss; reconcile off | Enable **Settlement reconcile** under Payments → Ax402, or fix upstream; see architecture payment flow |
 | Sepolia endpoint create fails | Seller account missing Sepolia USDC asset | Use `AX402_NETWORK=mainnet` for smoke tests |
 | Docker permission errors | Docker daemon not running / sock access | Start Docker Desktop; retry `npm run env:start` |
 | Plugin JS not updating | Stale build | `npm run build` + hard refresh |

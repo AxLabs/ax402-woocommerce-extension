@@ -14,8 +14,9 @@ For what this plugin owns vs WooCommerce, see [context.md](context.md).
    - Sync and enable **settlement tokens** from Ax402 platform config (stablecoins settle 1:1 with the USD catalog total; other tokens use `GET /exchange-rates?quote=usd` — currently live on **staging** `api.staging.ax402.io`)
 4. Ensure store currency is **USD** (catalog). Shoppers still pay in the settlement token they pick on the pay page.
 5. For sub-cent catalog prices (e.g. `$0.001`), set **WooCommerce → Settings → General → Number of decimals** to at least **4** (USD defaults to 2, which displays those as `$0.00`). When Ax402 is enabled, the plugin raises display decimals to at least 4 and trims trailing zeros (so `$0.001` / `$0.10` render correctly).
-6. For local testing with real gateway upstream, expose the shop with a public tunnel and ensure Ax402 API `upstream_base_url` matches that public origin (re-onboard / update API if needed).
-7. If endpoint creation fails for **Base Sepolia** (`eip155:845320402`), confirm the seller account has that payment asset enabled in Ax402 (or temporarily use Base mainnet for smoke tests).
+6. For local testing with real gateway upstream, expose the shop with a public tunnel and ensure Ax402 API `upstream_base_url` matches that public origin (re-onboard / update API if needed). Free ngrok requires the endpoint `upstream_auth` skip header — the plugin sets it automatically when `home_url` is an ngrok host (details in [architecture.md](architecture.md)).
+7. Optional: **Settlement reconcile** (default on) marks orders paid from Ax402 settlements if gateway upstream fulfill fails. Turn it off only when testing raw fulfill.
+8. If endpoint creation fails for **Base Sepolia** (`eip155:845320402`), confirm the seller account has that payment asset enabled in Ax402 (or temporarily use Base mainnet for smoke tests).
 
 ## Agent buy
 

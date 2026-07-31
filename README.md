@@ -24,7 +24,7 @@ This is a gateway extension — not a full storefront. Catalog, cart, customers,
 | [**Context**](docs/context.md) | What the extension is / is not, concerns, currency model |
 | [**Local development**](docs/local-development.md) | Start wp-env, `.env`, seed products, tunnel, first payment |
 | [**E2E environment**](docs/e2e.md) | Ready-to-go seed + ngrok + programmatic / MetaMask pay |
-| [Architecture](docs/architecture.md) | Components, trust model, CORS |
+| [Architecture](docs/architecture.md) | Payment flow, settlement lock, ngrok upstream_auth, reconcile |
 | [Merchant setup](docs/merchant-setup.md) | Production checklist + agent buy sketch |
 | [Testing](docs/testing.md) | Unit, live CP, E2E commands |
 

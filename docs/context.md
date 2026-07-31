@@ -63,10 +63,13 @@ Those belong to **WooCommerce** (and optional third-party plugins). Merchants ma
 
 ## Trust model (v0)
 
-1. Checkout selects Ax402 → plugin creates/updates a per-order Ax402 endpoint priced to the total.
+1. Checkout selects Ax402 → plugin creates/updates a per-order Ax402 endpoint priced to the total (multi-token `accepts`).
 2. Fulfill URL embeds `order_key` + a one-time `fulfill_token` stored on the order.
-3. After the gateway verifies payment, it calls fulfill; WooCommerce runs `payment_complete()`.
-4. Humans pay from the store origin against the **Ax402 gateway URL directly**. The plugin auto-registers that origin on the API via control-plane CORS (`/apis/{id}/cors`). Agents call the real gateway URL directly.
+3. Human pay page **locks** the chosen settlement token on the endpoint, then pays the **Ax402 gateway URL directly** (store origin registered via control-plane CORS).
+4. After on-chain settle, the gateway proxies to `{upstream_base_url}{path}` (with optional `upstream_auth` headers — e.g. ngrok skip). Woo fulfill runs `payment_complete()`.
+5. Optional **settlement reconcile** can mark the order paid from control-plane settlements if upstream fulfill never arrived.
+
+Detailed sequence, settlement lock, ngrok, and reconcile: [architecture.md](architecture.md).
 
 ## Where merchants look day to day
 

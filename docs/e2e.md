@@ -167,7 +167,9 @@ npm run env:stop
 | `is_available=no` | Fill `AX402_API_KEY` + `AX402_PAY_TO_ADDRESS`, `npm run env:e2e` |
 | Coming soon / “Pardon our dust” | Seed turns it off; re-run `npm run env:e2e` |
 | No payment methods | Same as `is_available=no` |
-| Fulfill never completes | Tunnel down, or `WP_HOME` / Ax402 upstream mismatch — re-run `npm run env:e2e` with `WP_BASE_URL` |
+| Fulfill never completes | Tunnel down, or `WP_HOME` / Ax402 upstream mismatch — re-run `npm run env:e2e` with `WP_BASE_URL`. Free ngrok: endpoints must include `upstream_auth` `ngrok-skip-browser-warning` (plugin sets this when the store host contains `ngrok`; place a new order or re-lock settlement after updating). Check order notes: “fulfill upstream” vs “settlement reconcile”. |
+| Order paid but note says reconcile | Upstream fulfill skipped/failed; gateway still settled. Fix tunnel/`upstream_auth`, or keep reconcile as safety net. |
+| ZCHF (or FX token) amount looks like USD atomics | Endpoint must be **locked** to the selected token before pay (`POST …/settlement`). Pay page does this automatically. |
 | Sepolia endpoint errors | Seller missing Sepolia USDC asset → try `AX402_NETWORK=mainnet` |
 | `test:e2e-pay` missing env | Set `WP_BASE_URL` and `AX402_EVM_PRIVATE_KEY` |
 
