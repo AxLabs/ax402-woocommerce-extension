@@ -33,10 +33,13 @@ if ! docker info >/dev/null 2>&1; then
 fi
 
 docker run --rm \
+  --user "$(id -u):$(id -g)" \
+  -e HOME=/tmp \
+  -e COMPOSER_HOME=/tmp/composer \
   -v "$ROOT:/app" \
   -w /app \
   -e AX402_API_KEY="${AX402_API_KEY:-}" \
   -e AX402_BASE_URL="${AX402_BASE_URL:-https://api.ax402.io}" \
   -e AX402_PAY_TO_ADDRESS="${AX402_PAY_TO_ADDRESS:-}" \
   composer:2 \
-  bash -lc 'cd plugin && composer install --no-interaction && ../plugin/vendor/bin/phpunit -c ../phpunit.xml.dist '"$*"
+  bash -lc 'mkdir -p /tmp/composer && cd plugin && composer install --no-interaction && ../plugin/vendor/bin/phpunit -c ../phpunit.xml.dist '"$*"

@@ -9,6 +9,13 @@ jobs:
   unit:
     runs-on: self-hosted
     steps:
+      # Docker PHPUnit can leave root-owned .phpunit.cache; reclaim before checkout clean.
+      - name: Reclaim workspace ownership
+        run: |
+          ws="${GITHUB_WORKSPACE:-.}"
+          if [ -e "$ws" ]; then
+            sudo chown -R "$(id -u):$(id -g)" "$ws" || true
+          fi
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
@@ -27,6 +34,12 @@ jobs:
     runs-on: self-hosted
     needs: unit
     steps:
+      - name: Reclaim workspace ownership
+        run: |
+          ws="${GITHUB_WORKSPACE:-.}"
+          if [ -e "$ws" ]; then
+            sudo chown -R "$(id -u):$(id -g)" "$ws" || true
+          fi
       - uses: actions/checkout@v4
       - name: Live control-plane smoke
         env:
