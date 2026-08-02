@@ -85,5 +85,7 @@ Detailed sequence, settlement lock, ngrok, and reconcile: [architecture.md](arch
 - [Local development & seeding](local-development.md) — start wp-env, seed, tunnel, first payment
 - [E2E environment](e2e.md) — ready-to-go seed + ngrok + programmatic / MetaMask pay (`npm run env:e2e`)
 - [Architecture](architecture.md) — components and flows
+- [Releases & versioning](../RELEASE.md) — SemVer, tags, GitHub Releases (agents: read before bumping)
 - [Merchant setup](merchant-setup.md) — production-oriented checklist
 - [Testing](testing.md) — unit, live control plane, E2E commands
+- [AGENTS.md](../AGENTS.md) — short agent entrypoint

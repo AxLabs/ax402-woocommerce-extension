@@ -25,6 +25,7 @@ This is a gateway extension — not a full storefront. Catalog, cart, customers,
 | [**Local development**](docs/local-development.md) | Start wp-env, `.env`, seed products, tunnel, first payment |
 | [**E2E environment**](docs/e2e.md) | Ready-to-go seed + ngrok + programmatic / MetaMask pay |
 | [Architecture](docs/architecture.md) | Payment flow, settlement lock, ngrok upstream_auth, reconcile |
+| [**Releases**](RELEASE.md) | SemVer, tagging, GitHub Releases, agent checklist |
 | [Merchant setup](docs/merchant-setup.md) | Production checklist + agent buy sketch |
 | [Testing](docs/testing.md) | Unit, live CP, E2E commands |
 
@@ -80,9 +81,20 @@ See [docs/testing.md](docs/testing.md) and [docs/e2e.md](docs/e2e.md).
 
 ```text
 plugin/     WordPress plugin (gateway, REST, pay page, blocks)
-bin/        seed-wp-env.sh, phpunit, package
+bin/        seed-wp-env.sh, phpunit, package, version helpers
 docs/       context, local-dev, architecture, merchant, testing
 tests/      PHP / JS / Playwright / programmatic pay
+RELEASE.md  versioning + GitHub release process
+AGENTS.md   short agent entrypoint
+```
+
+## Releases
+
+SemVer + tagged GitHub Releases (plugin zip attached). See **[RELEASE.md](RELEASE.md)**.
+
+```bash
+bash bin/check-version.sh
+bash bin/bump-version.sh 0.2.0   # then commit, tag v0.2.0, push tag
 ```
 
 ## Security

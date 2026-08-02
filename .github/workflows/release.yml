@@ -1,0 +1,84 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: self-hosted
+    steps:
+      - name: Reclaim workspace ownership
+        run: |
+          ws="${GITHUB_WORKSPACE:-.}"
+          if [ -e "$ws" ]; then
+            sudo chown -R "$(id -u):$(id -g)" "$ws" || true
+          fi
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Verify tag matches plugin version
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          bash bin/check-version.sh "$TAG"
+
+      - name: Install JS deps
+        run: |
+          npm ci || npm install
+          npm --prefix plugin ci || npm --prefix plugin install
+
+      - name: Build + package plugin zip
+        run: npm run package
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
+          ZIP="dist/ax402-woocommerce-${VERSION}.zip"
+          if [[ ! -f "$ZIP" ]]; then
+            echo "Missing package artifact: $ZIP" >&2
+            ls -la dist || true
+            exit 1
+          fi
+
+          NOTES="$(mktemp)"
+          {
+            echo "## Ax402 for WooCommerce ${TAG}"
+            echo
+            echo "WordPress plugin package: \`$(basename "$ZIP")\`"
+            echo
+            echo "Install: upload/unzip into \`wp-content/plugins/\` (folder name \`ax402-woocommerce\` after extract if needed), or upload the zip via WP Admin → Plugins → Add New."
+            echo
+            if [[ -f plugin/readme.txt ]]; then
+              echo "### Changelog (from readme.txt)"
+              echo
+              # Emit the section for this Stable tag when present; otherwise last changelog block.
+              awk -v ver="$VERSION" '
+                BEGIN { show=0 }
+                /^== Changelog ==/ { in_cl=1; next }
+                in_cl && /^= / {
+                  if ($0 ~ ("^= " ver " =")) { show=1; print; next }
+                  if (show==1) exit
+                }
+                in_cl && show { print }
+              ' plugin/readme.txt
+            fi
+            echo
+            echo "See [RELEASE.md](https://github.com/${{ github.repository }}/blob/main/RELEASE.md) for versioning and release process."
+          } > "$NOTES"
+
+          gh release create "$TAG" "$ZIP" \
+            --title "$TAG" \
+            --notes-file "$NOTES" \
+            --verify-tag

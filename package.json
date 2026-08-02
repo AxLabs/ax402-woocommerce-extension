@@ -18,6 +18,8 @@
     "test:e2e-ui": "playwright test -c tests/e2e/playwright.config.ts",
     "test:e2e-pay": "node tests/e2e/programmatic-pay.mjs",
     "package": "bash bin/package-plugin.sh",
+    "version:check": "bash bin/check-version.sh",
+    "version:bump": "bash bin/bump-version.sh",
     "test": "npm run test:unit && npm run test:integration && npm run test:js"
   },
   "devDependencies": {

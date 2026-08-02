@@ -31,3 +31,6 @@ Thumbs.db
 
 # wp-env local data (if present in workspace)
 .wp-env/
+
+# Release artifacts
+dist/
