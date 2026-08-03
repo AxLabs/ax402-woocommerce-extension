@@ -40,14 +40,17 @@ https://github.com/AxLabs/ax402-woocommerce-extension
 ```
 npm --prefix plugin ci
 npm --prefix plugin run build
+# Optional lean EVM-only bundle (stubs Hedera): AX402_EVM_ONLY=1 npm --prefix plugin run build
 ```
+
+The default build includes Hedera WalletConnect support (~2MB pay-page bundle).
 
 == Installation ==
 
 1. Upload the `ax402-for-woocommerce` folder to `/wp-content/plugins/`, or install the zip via Plugins → Add New → Upload.
 2. Activate the plugin (WooCommerce required).
 3. Set the store currency to USD.
-4. Go to WooCommerce → Settings → Payments → Ax402 and enter your API key, pay-to wallet, and settlement tokens.
+4. Go to WooCommerce → Settings → Payments → Ax402 and enter your API key, EVM pay-to wallet, settlement tokens, and (if enabling Hedera tokens) a Hedera account id plus WalletConnect project ID.
 
 == Frequently Asked Questions ==
 

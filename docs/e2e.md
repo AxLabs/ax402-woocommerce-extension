@@ -12,7 +12,7 @@ Product context: [context.md](context.md). Day-to-day local setup: [local-develo
 |---|---|
 | `wp-env` running | http://localhost:8888 responds |
 | Seed applied | 6 demo products, Ax402 enabled, coming-soon **off** |
-| Gateway | `is_available=yes` (API key + pay-to from `.env`) |
+| Gateway | `is_available=yes` (API key + EVM and/or Hedera pay-to from settings / `.env`) |
 | Public origin | `WP_BASE_URL` / `WP_HOME` = HTTPS tunnel (required for live settle) |
 | Ax402 upstream | Store API `upstream_base_url` matches that same HTTPS origin |
 | Buyer funds | Wallet in `AX402_EVM_PRIVATE_KEY` has USDC on the configured network |
@@ -169,7 +169,7 @@ npm run env:stop
 | No payment methods | Same as `is_available=no` |
 | Fulfill never completes | Tunnel down, or `WP_HOME` / Ax402 upstream mismatch — re-run `npm run env:e2e` with `WP_BASE_URL`. Free ngrok: endpoints must include `upstream_auth` `ngrok-skip-browser-warning` (plugin sets this when the store host contains `ngrok`; place a new order or re-lock settlement after updating). Check order notes: “fulfill upstream” vs “settlement reconcile”. |
 | Order paid but note says reconcile | Upstream fulfill skipped/failed; gateway still settled. Fix tunnel/`upstream_auth`, or keep reconcile as safety net. |
-| ZCHF (or FX token) amount looks like USD atomics | Endpoint must be **locked** to the selected token before pay (`POST …/settlement`). Pay page does this automatically. |
+| ZCHF (or FX token) amount looks like USD atomics | Settlement select must resolve the **per-token** endpoint before pay (`POST …/settlement`). Pay page does this automatically. |
 | Sepolia endpoint errors | Seller missing Sepolia USDC asset → try `AX402_NETWORK=mainnet` |
 | `test:e2e-pay` missing env | Set `WP_BASE_URL` and `AX402_EVM_PRIVATE_KEY` |
 

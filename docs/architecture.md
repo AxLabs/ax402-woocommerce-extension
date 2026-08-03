@@ -53,15 +53,24 @@ Pay page (store origin)
 
 Agents follow the same gateway → settle → upstream fulfill path; they call the gateway URL from a buyer SDK instead of the pay page.
 
-## Why settlement lock exists
+## Per-token endpoints
 
-At prep time the endpoint may list **several** `accepts` (one per enabled token). Some gateway builds rewrite co-listed Base assets (e.g. ZCHF) toward a USD×10^decimals amount when USDC is also present.
+Payment prep creates **one temporary Ax402 endpoint per enabled settlement token** (single `accept` each). Example: USDC on Base, USDC on Hedera, and XGAS on Neo X → three endpoints with distinct fulfill path suffixes.
 
-Before `PaywallGate` runs, the pay page **locks** the endpoint to the shopper’s chosen token via:
+Before `PaywallGate` runs, the pay page selects the shopper’s token via:
 
-`POST /wp-json/ax402/v1/orders/{order_key}/settlement` `{ "tokenId": "eip155:…:0x…" }`
+`POST /wp-json/ax402/v1/orders/{order_key}/settlement` `{ "tokenId": "…" }`
 
-That rewrites the Ax402 endpoint to a **single** accept with the plugin’s FX-converted atomic amount, then payment proceeds.
+That returns the pre-created `gateway_url` / `endpoint_id` for that token (no multi-accept rewrite). This avoids gateway bugs when co-listing currencies on one endpoint.
+
+## Dual pay-to & dual APIs
+
+- **EVM:** one `pay_to_address` for all `eip155:*` networks on the store’s EVM Ax402 API (`api_id` / `gateway_host`).
+- **Hedera:** `pay_to_hedera_account_id` (`0.0.x`) on a **separate** Hedera Ax402 API (`hedera_api_id` / `hedera_gateway_host`). Editable only when any Hedera settlement token is enabled. WalletConnect project id is required for Hedera shopper wallets.
+
+The control plane rejects mixing `eip155` and `hedera` payment tokens on one API, so the plugin maintains **two store APIs** and creates per-token temporary endpoints on the matching family. Each API is scoped with `accept_all_tokens=false` and family-only `accepted_token_ids`.
+
+Hedera payment requirements include `extra.feePayer` from facilitator `GET /supported-networks` (or `signers["hedera:*"]`). The shopper only **signs** a partially-signed `TransferTransaction`; the facilitator co-signs, pays network fees, and submits.
 
 ## Upstream fulfill & ngrok
 
@@ -69,7 +78,7 @@ After settlement the gateway HTTP-proxies to:
 
 `{api.upstream_base_url}` + `{endpoint.path_pattern}`
 
-`ensure_api()` keeps `upstream_base_url` aligned with `home_url()` (the public tunnel in E2E).
+`ensure_api()` / `ensure_hedera_api()` keep each family’s `upstream_base_url` aligned with `home_url()` (the public tunnel in E2E).
 
 **Free ngrok** (`*.ngrok-free.dev`) returns interstitial HTML (`ERR_NGROK_6024`) to non-browser clients unless the request includes `ngrok-skip-browser-warning`. When the store origin host contains `ngrok`, endpoint create/update sets:
 
@@ -89,7 +98,7 @@ The gateway injects that header on the upstream hop. Without it, settle can succ
 
 **WooCommerce → Settings → Payments → Ax402 → Settlement reconcile** (`yes` by default).
 
-When enabled, order-status polls ask the control plane for settlements and, if a matching on-chain settlement exists for the order’s `endpoint_id`, mark the order paid even if upstream fulfill never ran.
+When enabled, order-status polls ask the control plane for settlements and, if a matching on-chain settlement exists for **any** of the order’s per-token `endpoint_id`s, mark the order paid even if upstream fulfill never ran.
 
 Matching is by **endpoint_id** (authoritative). Amount comparison is best-effort only — FX / decimal differences must not block reconcile.
 

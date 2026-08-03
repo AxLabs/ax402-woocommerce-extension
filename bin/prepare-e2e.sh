@@ -61,6 +61,27 @@ if (\$cors['ok']) {
 } else {
   echo \"cors sync warning: {\$cors['error']}\n\";
 }
+\$settings = Ax402_WC_Settings::all();
+if (\$settings['pay_to_hedera_account_id'] !== '') {
+  try {
+    \$hedera = Ax402_WC_Store_Onboarding::ensure_hedera_api(\$client);
+    \$h_api = \$hedera['api'];
+    \$h_current = rtrim((string) (\$h_api['upstream_base_url'] ?? ''), '/');
+    if (\$h_current !== rtrim(\$base, '/')) {
+      \$client->update_api(\$hedera['api_id'], ['upstream_base_url' => \$base]);
+      echo \"hedera upstream updated to {\$base}\n\";
+    } else {
+      echo \"hedera upstream already matches {\$base}\n\";
+    }
+    echo \"hedera_api_id={\$hedera['api_id']} hedera_gateway_host={\$hedera['gateway_host']}\n\";
+    \$h_cors = Ax402_WC_Gateway_Cors::ensure_store_origins(\$hedera['api_id'], \$client);
+    if (!\$h_cors['ok']) {
+      echo \"hedera cors sync warning: {\$h_cors['error']}\n\";
+    }
+  } catch (Throwable \$e) {
+    echo \"hedera onboard warning: \" . \$e->getMessage() . \"\n\";
+  }
+}
 "
 else
   echo "==> WP_BASE_URL not set — skipped tunnel / upstream sync."
@@ -88,7 +109,7 @@ echo "network={$s["network_mode"]}\n";
 echo "api_slug={$s["api_slug"]}\n";
 echo "gateway_host={$s["gateway_host"]}\n";
 if ($available !== "yes") {
-  echo "NOT READY: fill AX402_API_KEY + AX402_PAY_TO_ADDRESS in .env and re-run.\n";
+  echo "NOT READY: fill AX402_API_KEY + AX402_PAY_TO_ADDRESS in .env (and Hedera vars if testing Hedera) and re-run.\n";
   exit(1);
 }
 if (count($products) < 1) {

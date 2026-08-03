@@ -137,9 +137,12 @@ final class Ax402_WC_Gateway_Proxy_Controller
         }
 
         $settings = Ax402_WC_Settings::all();
-        $allowed_host = strtolower((string) $settings['gateway_host']);
         $host = strtolower((string) $parts['host']);
-        if ($allowed_host !== '' && $host === $allowed_host) {
+        $allowed_hosts = array_filter([
+            strtolower((string) $settings['gateway_host']),
+            strtolower((string) $settings['hedera_gateway_host']),
+        ]);
+        if (in_array($host, $allowed_hosts, true)) {
             return true;
         }
 

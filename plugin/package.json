@@ -12,10 +12,14 @@
   "dependencies": {
     "@ax402/react-paywall": "^0.0.4",
     "@ax402/sdk": "^0.0.4",
+    "@hashgraph/hedera-wallet-connect": "^1.5.1",
+    "@hashgraph/proto": "^2.25.0",
+    "@walletconnect/modal": "^2.7.0",
     "@wordpress/element": "^6.0.0",
     "@wordpress/html-entities": "^4.0.0",
     "@x402/evm": "^2.0.0",
     "@x402/fetch": "^2.0.0",
+    "@x402/hedera": "^2.20.0",
     "viem": "^2.0.0"
   },
   "devDependencies": {

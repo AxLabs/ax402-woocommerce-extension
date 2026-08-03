@@ -54,9 +54,10 @@ Those belong to **WooCommerce** (and optional third-party plugins). Merchants ma
 
 - Store / catalog currency: **USD** (required). This is not a storefront multi-currency switcher.
 - Settlement assets come from Ax402 `GET /config/platform` → `payment_tokens`. Merchants multi-select which tokens the store accepts.
-- Networks are derived from those tokens (and optionally `GET /supported-networks`). Display names / public RPC / explorers come from token `extra` when present, otherwise from dynamic chain metadata (ethereum-lists / chainid.network) — not a hard-coded chain table in the plugin.
-- At payment prep, the plugin converts **USD order total → settlement amount** via an exchange-rate interface: common stablecoins (**USDC**, **USDT**, …) are **1:1**; other tokens use Ax402 `GET /exchange-rates?quote=usd&date=YYYY-MM-DD` (control-plane price inverted to tokens-per-USD). The plugin tries **today**, then **yesterday**, then the closest previous business day when those payloads are empty or error. Tokens without a resolvable rate are omitted from checkout accepts.
-- Each order endpoint is created with **multiple `accepts`** (one per enabled, priced token). Humans pick an asset on the pay page; agents/buyers choose via their policy.
+- Networks are derived from those tokens (and optionally `GET /supported-networks`). Display names / public RPC / explorers come from token `extra` when present, otherwise from dynamic chain metadata (ethereum-lists / chainid.network) — not a hard-coded chain table in the plugin. Hedera uses Mirror Node / HashScan defaults for `hedera:*`.
+- Pay-to: one **EVM** address for all `eip155:*` tokens; a separate **Hedera account id** when any `hedera:*` token is enabled (field greyed out until then). Hedera shopper connect needs a WalletConnect project id.
+- At payment prep the plugin creates **one temporary Ax402 endpoint per priced token** (single accept). Humans pick an asset on the pay page; that selects the matching `gateway_url`. Agents/buyers choose via their policy.
+- At payment prep, the plugin converts **USD order total → settlement amount** via an exchange-rate interface: common stablecoins (**USDC**, **USDT**, …) are **1:1**; other tokens use Ax402 `GET /exchange-rates?quote=usd&date=YYYY-MM-DD` (today → yesterday → closest previous business day). Tokens without a resolvable rate are omitted from checkout accepts.
 - Staging currently hosts the live FX endpoint (`https://api.staging.ax402.io`); point `AX402_BASE_URL` / gateway base URL at staging to exercise non-stable settlement.
 - Sub-cent catalog prices are supported when decimals are raised (plugin helps when Ax402 is enabled).
 - Registering settlement symbols as Woo store currencies / FX catalog browsing remains **out of scope**.

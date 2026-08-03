@@ -1,0 +1,1 @@
+(globalThis.webpackChunkax402_for_woocommerce=globalThis.webpackChunkax402_for_woocommerce||[]).push([[210],{9432(){},4955(){},2065(){},7790(){},3776(){}}]);

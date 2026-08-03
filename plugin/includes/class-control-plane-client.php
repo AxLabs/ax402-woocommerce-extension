@@ -119,6 +119,8 @@ final class Ax402_WC_Control_Plane_Client
     }
 
     /**
+     * @param list<string>|null $accepted_token_ids When set, scopes the API to these
+     *        platform token ids (required to avoid mixing eip155 + hedera on one API).
      * @return array<string, mixed>
      */
     public function create_api(
@@ -126,15 +128,24 @@ final class Ax402_WC_Control_Plane_Client
         string $slug,
         string $upstream_base_url,
         ?string $pay_to_address = null,
+        ?array $accepted_token_ids = null,
+        bool $accept_all_tokens = false,
     ): array {
         $body = [
             'name' => $name,
             'slug' => $slug,
             'upstream_base_url' => $upstream_base_url,
+            'accept_all_tokens' => $accept_all_tokens,
         ];
         if ($pay_to_address !== null && $pay_to_address !== '') {
             $body['pay_to_mode'] = 'user_wallet';
             $body['pay_to_address'] = $pay_to_address;
+        }
+        if ($accepted_token_ids !== null) {
+            $body['accepted_token_ids'] = array_values(array_filter(array_map(
+                static fn ($id): string => (string) $id,
+                $accepted_token_ids
+            )));
         }
 
         $result = $this->request('POST', '/apis', $body);

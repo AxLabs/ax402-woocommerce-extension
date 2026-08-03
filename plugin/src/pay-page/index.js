@@ -22,14 +22,22 @@ import {
 	getWalletChainId,
 	switchOrAddChain,
 } from './wallet-rpc';
+import {
+	fetchHederaBalance,
+	isHederaOption,
+	shortHederaAccount,
+} from './hedera-readiness';
 
 function readConfig() {
 	return window.ax402PayPage || {};
 }
 
-function shortAddress( address ) {
+function shortAddress( address, hedera = false ) {
 	if ( ! address ) {
 		return '';
+	}
+	if ( hedera ) {
+		return shortHederaAccount( address );
 	}
 	return `${ address.slice( 0, 6 ) }…${ address.slice( -4 ) }`;
 }
@@ -173,8 +181,13 @@ function StepCard( { title, description, children, footer } ) {
 	);
 }
 
-function ConnectStep() {
-	const { connectWallet, refreshWallets, connectedWalletName } = usePaywall();
+function ConnectStep( { hedera } ) {
+	const {
+		connectWallet,
+		connectHederaWallet,
+		refreshWallets,
+		connectedWalletName,
+	} = usePaywall();
 	const [ busy, setBusy ] = useState( false );
 	const [ error, setError ] = useState( '' );
 	const [ pickerWallets, setPickerWallets ] = useState( [] );
@@ -184,11 +197,15 @@ function ConnectStep() {
 		setError( '' );
 		setPickerWallets( [] );
 		try {
-			await connectWallet();
-		} catch ( e ) {
-			if ( e instanceof WalletSelectionRequiredError ) {
-				setPickerWallets( e.wallets || [] );
+			if ( hedera ) {
+				await connectHederaWallet();
 			} else {
+				await connectWallet();
+			}
+		} catch ( e ) {
+			if ( ! hedera && e instanceof WalletSelectionRequiredError ) {
+				setPickerWallets( e.wallets || [] );
+			} else if ( ! hedera ) {
 				try {
 					const list = await refreshWallets();
 					if ( list?.length > 1 ) {
@@ -199,6 +216,8 @@ function ConnectStep() {
 				} catch {
 					setError( e?.message || 'Could not connect wallet' );
 				}
+			} else {
+				setError( e?.message || 'Could not connect Hedera wallet' );
 			}
 		} finally {
 			setBusy( false );
@@ -221,9 +240,13 @@ function ConnectStep() {
 	return (
 		<StepCard
 			title="Connect your wallet"
-			description="Connect and just sign the payment to continue."
+			description={
+				hedera
+					? 'Connect a Hedera wallet via WalletConnect, then sign the payment.'
+					: 'Connect and just sign the payment to continue.'
+			}
 		>
-			{ pickerWallets.length > 0 ? (
+			{ ! hedera && pickerWallets.length > 0 ? (
 				<WalletPicker
 					wallets={ pickerWallets }
 					disabled={ busy }
@@ -237,7 +260,14 @@ function ConnectStep() {
 					disabled={ busy }
 					onClick={ onConnect }
 				>
-					{ busy ? 'Connecting…' : 'Connect wallet' }
+					{ ( () => {
+						if ( busy ) {
+							return 'Connecting…';
+						}
+						return hedera
+							? 'Connect Hedera wallet'
+							: 'Connect wallet';
+					} )() }
 				</button>
 			) }
 			{ error ? (
@@ -414,16 +444,18 @@ function PaymentSteps( { config, option, endpointReady, lockError } ) {
 	const [ chainId, setChainId ] = useState( null );
 	const [ balanceAtomic, setBalanceAtomic ] = useState( null );
 	const [ readError, setReadError ] = useState( '' );
+	const hedera = isHederaOption( option );
 
-	const networkOk = networkMatches( chainId, option?.chainIdHex );
+	const networkOk = hedera
+		? true
+		: networkMatches( chainId, option?.chainIdHex );
 	const balanceOk = hasSufficientBalance(
 		balanceAtomic,
 		option?.amountAtomic
 	);
 
 	useEffect( () => {
-		const provider = getEthereumProvider();
-		if ( ! provider || ! walletAddress || ! option ) {
+		if ( ! walletAddress || ! option ) {
 			setChainId( null );
 			setBalanceAtomic( null );
 			return undefined;
@@ -433,6 +465,27 @@ function PaymentSteps( { config, option, endpointReady, lockError } ) {
 
 		async function refresh() {
 			try {
+				if ( hedera ) {
+					const bal = await fetchHederaBalance( {
+						mirrorBase: option.rpcUrl,
+						accountId: walletAddress,
+						asset: option.asset,
+						isNative: Boolean( option.isNative ),
+					} );
+					if ( ! cancelled ) {
+						setChainId( 'hedera' );
+						setBalanceAtomic( bal );
+						setReadError( '' );
+					}
+					return;
+				}
+
+				const provider = getEthereumProvider();
+				if ( ! provider ) {
+					setChainId( null );
+					setBalanceAtomic( null );
+					return;
+				}
 				const nextChain = await getWalletChainId( provider );
 				if ( cancelled ) {
 					return;
@@ -462,6 +515,22 @@ function PaymentSteps( { config, option, endpointReady, lockError } ) {
 		}
 
 		refresh();
+
+		if ( hedera ) {
+			const timer = setInterval( refresh, 8000 );
+			return () => {
+				cancelled = true;
+				clearInterval( timer );
+			};
+		}
+
+		const provider = getEthereumProvider();
+		if ( ! provider ) {
+			return () => {
+				cancelled = true;
+			};
+		}
+
 		const onChain = ( id ) => {
 			setChainId( typeof id === 'string' ? id : null );
 		};
@@ -475,11 +544,11 @@ function PaymentSteps( { config, option, endpointReady, lockError } ) {
 			provider.removeListener?.( 'chainChanged', onChain );
 			provider.removeListener?.( 'accountsChanged', refresh );
 		};
-	}, [ walletAddress, option ] );
+	}, [ walletAddress, option, hedera ] );
 
 	let step = null;
 	if ( ! walletAddress ) {
-		step = <ConnectStep />;
+		step = <ConnectStep hedera={ hedera } />;
 	} else if ( ! option ) {
 		step = (
 			<StepCard
@@ -540,7 +609,6 @@ function PaymentSteps( { config, option, endpointReady, lockError } ) {
 
 function PayApp() {
 	const config = readConfig();
-	const gatewayUrl = config.gatewayUrl;
 	const options = useMemo(
 		() =>
 			Array.isArray( config.settlementOptions )
@@ -553,6 +621,9 @@ function PayApp() {
 	);
 	const [ endpointReady, setEndpointReady ] = useState( false );
 	const [ lockError, setLockError ] = useState( '' );
+	const [ activeGatewayUrl, setActiveGatewayUrl ] = useState(
+		() => options[ 0 ]?.gatewayUrl || config.gatewayUrl || ''
+	);
 
 	useEffect( () => {
 		if (
@@ -577,6 +648,9 @@ function PayApp() {
 
 		const url = config.selectSettlementUrl;
 		if ( ! url ) {
+			setActiveGatewayUrl(
+				selected.gatewayUrl || config.gatewayUrl || ''
+			);
 			setEndpointReady( true );
 			setLockError( '' );
 			return undefined;
@@ -606,6 +680,12 @@ function PayApp() {
 					throw new Error( msg );
 				}
 				if ( ! cancelled ) {
+					setActiveGatewayUrl(
+						data?.gateway_url ||
+							selected.gatewayUrl ||
+							config.gatewayUrl ||
+							''
+					);
 					setEndpointReady( true );
 				}
 			} catch ( e ) {
@@ -622,8 +702,14 @@ function PayApp() {
 		return () => {
 			cancelled = true;
 		};
-	}, [ selected?.tokenId, config.selectSettlementUrl ] );
+	}, [
+		selected?.tokenId,
+		selected?.gatewayUrl,
+		config.selectSettlementUrl,
+		config.gatewayUrl,
+	] );
 
+	const gatewayUrl = activeGatewayUrl || config.gatewayUrl;
 	if ( ! gatewayUrl ) {
 		return (
 			<div>
@@ -643,6 +729,7 @@ function PayApp() {
 		selected?.network || config.preferredNetworks || config.network;
 	const policyAsset = selected?.asset || config.allowedAssets;
 	const rpcDefault = selected?.rpcUrl || config.rpcUrl;
+	const payConfig = { ...config, gatewayUrl };
 
 	return (
 		<>
@@ -680,6 +767,7 @@ function PayApp() {
 					preferredAssets: policyAsset,
 					strategy: 'preference-first',
 				} }
+				hederaWalletConnect={ config.hederaWalletConnect || undefined }
 				rpc={ {
 					defaultUrl: rpcDefault,
 					byNetwork: config.rpcByNetwork || undefined,
@@ -695,7 +783,7 @@ function PayApp() {
 				} }
 			>
 				<PaymentSteps
-					config={ config }
+					config={ payConfig }
 					option={ selected }
 					endpointReady={ endpointReady }
 					lockError={ lockError }

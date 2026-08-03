@@ -111,8 +111,8 @@ final class Ax402_WC_Settlement_Reconcile
             return false;
         }
 
-        $endpoint_id = (string) $order->get_meta(Ax402_WC_Order_Payment::META_ENDPOINT_ID);
-        if ($endpoint_id === '') {
+        $endpoint_ids = Ax402_WC_Order_Payment::endpoint_ids_from_order($order);
+        if ($endpoint_ids === []) {
             return false;
         }
 
@@ -122,14 +122,20 @@ final class Ax402_WC_Settlement_Reconcile
         }
 
         $settings = Ax402_WC_Settings::all();
-        if ($settings['api_id'] === '') {
+        $api_ids = Ax402_WC_Settings::configured_api_ids($settings);
+        if ($api_ids === []) {
             return false;
         }
 
         try {
             // Always refresh during reconcile so pay-page status polls see new
             // settlements within ~1s instead of waiting out the transient TTL.
-            $settlements = self::fetch_settlements($client, $settings['api_id'], true);
+            $settlements = [];
+            foreach ($api_ids as $api_id) {
+                foreach (self::fetch_settlements($client, $api_id, true) as $row) {
+                    $settlements[] = $row;
+                }
+            }
         } catch (Throwable $e) {
             $order->add_order_note('Ax402 settlement reconcile failed: ' . $e->getMessage());
             $order->save();
@@ -148,12 +154,18 @@ final class Ax402_WC_Settlement_Reconcile
             }
         }
 
-        $match = self::find_matching_settlement(
-            $settlements,
-            $endpoint_id,
-            $amount_atomic,
-            $acceptable
-        );
+        $match = null;
+        foreach ($endpoint_ids as $endpoint_id) {
+            $match = self::find_matching_settlement(
+                $settlements,
+                $endpoint_id,
+                $amount_atomic,
+                $acceptable
+            );
+            if ($match !== null) {
+                break;
+            }
+        }
         if ($match === null) {
             return false;
         }

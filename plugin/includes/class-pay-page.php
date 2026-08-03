@@ -149,6 +149,7 @@ final class Ax402_WC_Pay_Page
                     $settings['scheme']
                 );
                 foreach ($rebuilt as $row) {
+                    $is_hedera = !empty($row['is_hedera']);
                     $options[] = [
                         'tokenId' => (string) $row['token_id'],
                         'symbol' => (string) $row['symbol'],
@@ -163,7 +164,10 @@ final class Ax402_WC_Pay_Page
                         'chainIdHex' => (string) $row['chain_id_hex'],
                         'rpcUrl' => (string) $row['rpc_url'],
                         'blockExplorerUrl' => (string) ($row['explorer_url'] ?? ''),
-                        'isNative' => Ax402_WC_Platform_Tokens::is_native_asset((string) $row['asset']),
+                        'isNative' => $is_hedera
+                            ? Ax402_WC_Platform_Tokens::is_hedera_native_asset((string) $row['asset'])
+                            : Ax402_WC_Platform_Tokens::is_native_asset((string) $row['asset']),
+                        'isHedera' => $is_hedera,
                     ];
                 }
             } catch (Throwable $e) {
@@ -190,10 +194,31 @@ final class Ax402_WC_Pay_Page
 
         // Ensure this store origin is allowed on the Ax402 gateway, then pay directly.
         $settings_full = Ax402_WC_Settings::all();
-        if ($settings_full['api_id'] !== '') {
-            Ax402_WC_Gateway_Cors::ensure_store_origins($settings_full['api_id']);
+        foreach (Ax402_WC_Settings::configured_api_ids($settings_full) as $cors_api_id) {
+            Ax402_WC_Gateway_Cors::ensure_store_origins($cors_api_id);
         }
         $cors = Ax402_WC_Gateway_Cors::status();
+        $wc_project = trim((string) ($settings_full['walletconnect_project_id'] ?? ''));
+        $hedera_wallet_connect = null;
+        if ($wc_project !== '') {
+            $hedera_network = 'hedera:mainnet';
+            foreach ($options as $opt) {
+                if (!empty($opt['isHedera']) || Ax402_WC_Platform_Tokens::is_hedera_network((string) ($opt['network'] ?? ''))) {
+                    $hedera_network = (string) $opt['network'];
+                    break;
+                }
+            }
+            $hedera_wallet_connect = [
+                'projectId' => $wc_project,
+                'network' => $hedera_network,
+                'metadata' => [
+                    'name' => get_bloginfo('name') ?: 'WooCommerce',
+                    'description' => 'Ax402 checkout',
+                    'url' => home_url('/'),
+                    'icons' => [],
+                ],
+            ];
+        }
 
         return [
             // Browser talks to the Ax402 gateway directly (CORS managed via control plane).
@@ -218,6 +243,7 @@ final class Ax402_WC_Pay_Page
             'rpcByNetwork' => $rpc_by_network,
             'settlementOptions' => $options,
             'shopUrl' => wc_get_page_permalink('shop') ?: home_url('/'),
+            'hederaWalletConnect' => $hedera_wallet_connect,
         ];
     }
 

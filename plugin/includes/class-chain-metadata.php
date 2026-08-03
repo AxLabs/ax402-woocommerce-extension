@@ -81,6 +81,20 @@ final class Ax402_WC_Chain_Metadata
      */
     public static function from_caip2(string $network): array
     {
+        $network = trim($network);
+        if (Ax402_WC_Platform_Tokens::is_hedera_network($network)) {
+            $is_testnet = str_contains(strtolower($network), 'testnet');
+            return [
+                'label' => $is_testnet ? 'Hedera Testnet' : 'Hedera Mainnet',
+                'rpc_url' => $is_testnet
+                    ? 'https://testnet.mirrornode.hedera.com'
+                    : 'https://mainnet-public.mirrornode.hedera.com',
+                'explorer_url' => $is_testnet
+                    ? 'https://hashscan.io/testnet'
+                    : 'https://hashscan.io/mainnet',
+            ];
+        }
+
         $chain_id = self::eip155_chain_id($network);
         if ($chain_id === null) {
             return ['label' => '', 'rpc_url' => '', 'explorer_url' => ''];

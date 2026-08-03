@@ -15,11 +15,16 @@ final class Ax402_WC_Settings
      *   base_url:string,
      *   api_key:string,
      *   pay_to_address:string,
+     *   pay_to_hedera_account_id:string,
+     *   walletconnect_project_id:string,
      *   network_mode:string,
      *   scheme:string,
      *   api_id:string,
      *   gateway_host:string,
      *   api_slug:string,
+     *   hedera_api_id:string,
+     *   hedera_gateway_host:string,
+     *   hedera_api_slug:string,
      *   enabled_token_ids:list<string>,
      *   settlement_reconcile:string
      * }
@@ -30,11 +35,16 @@ final class Ax402_WC_Settings
             'base_url' => 'https://api.ax402.io',
             'api_key' => '',
             'pay_to_address' => '',
+            'pay_to_hedera_account_id' => '',
+            'walletconnect_project_id' => '',
             'network_mode' => 'sepolia',
             'scheme' => 'exact',
             'api_id' => '',
             'gateway_host' => '',
             'api_slug' => '',
+            'hedera_api_id' => '',
+            'hedera_gateway_host' => '',
+            'hedera_api_slug' => '',
             'enabled_token_ids' => [],
             'settlement_reconcile' => 'yes',
         ];
@@ -73,6 +83,8 @@ final class Ax402_WC_Settings
             'base_url' => (string) $merged['base_url'],
             'api_key' => (string) $merged['api_key'],
             'pay_to_address' => (string) $merged['pay_to_address'],
+            'pay_to_hedera_account_id' => (string) $merged['pay_to_hedera_account_id'],
+            'walletconnect_project_id' => (string) $merged['walletconnect_project_id'],
             'network_mode' => in_array($merged['network_mode'], ['sepolia', 'mainnet'], true)
                 ? (string) $merged['network_mode']
                 : 'sepolia',
@@ -80,9 +92,49 @@ final class Ax402_WC_Settings
             'api_id' => (string) $merged['api_id'],
             'gateway_host' => (string) $merged['gateway_host'],
             'api_slug' => (string) $merged['api_slug'],
+            'hedera_api_id' => (string) $merged['hedera_api_id'],
+            'hedera_gateway_host' => (string) $merged['hedera_gateway_host'],
+            'hedera_api_slug' => (string) $merged['hedera_api_slug'],
             'enabled_token_ids' => $token_ids,
             'settlement_reconcile' => $reconcile,
         ];
+    }
+
+    /**
+     * Control-plane API ids for this store (EVM and/or Hedera).
+     *
+     * @return list<string>
+     */
+    public static function configured_api_ids(?array $settings = null): array
+    {
+        $settings ??= self::all();
+        $ids = [];
+        foreach (['api_id', 'hedera_api_id'] as $key) {
+            $id = trim((string) ($settings[$key] ?? ''));
+            if ($id !== '') {
+                $ids[$id] = true;
+            }
+        }
+
+        return array_keys($ids);
+    }
+
+    /**
+     * Pay-to value for a settlement network (EVM address or Hedera account id).
+     */
+    public static function pay_to_for_network(string $network): string
+    {
+        $settings = self::all();
+        if (Ax402_WC_Platform_Tokens::is_hedera_network($network)) {
+            return trim($settings['pay_to_hedera_account_id']);
+        }
+
+        return trim($settings['pay_to_address']);
+    }
+
+    public static function is_valid_hedera_account_id(string $account_id): bool
+    {
+        return preg_match('/^\d+\.\d+\.\d+$/', trim($account_id)) === 1;
     }
 
     /**
@@ -115,6 +167,11 @@ final class Ax402_WC_Settings
     public static function update(array $input): void
     {
         $current = self::all();
+        $hedera = $current['pay_to_hedera_account_id'];
+        if (array_key_exists('pay_to_hedera_account_id', $input)) {
+            $hedera = self::sanitize_hedera_account_id((string) $input['pay_to_hedera_account_id']);
+        }
+
         $next = [
             'base_url' => isset($input['base_url'])
                 ? esc_url_raw((string) $input['base_url'])
@@ -122,6 +179,10 @@ final class Ax402_WC_Settings
             'pay_to_address' => isset($input['pay_to_address'])
                 ? sanitize_text_field((string) $input['pay_to_address'])
                 : $current['pay_to_address'],
+            'pay_to_hedera_account_id' => $hedera,
+            'walletconnect_project_id' => isset($input['walletconnect_project_id'])
+                ? sanitize_text_field((string) $input['walletconnect_project_id'])
+                : $current['walletconnect_project_id'],
             'network_mode' => isset($input['network_mode'])
                 && in_array($input['network_mode'], ['sepolia', 'mainnet'], true)
                 ? (string) $input['network_mode']
@@ -134,6 +195,15 @@ final class Ax402_WC_Settings
             'api_slug' => isset($input['api_slug'])
                 ? sanitize_title((string) $input['api_slug'])
                 : $current['api_slug'],
+            'hedera_api_id' => isset($input['hedera_api_id'])
+                ? sanitize_text_field((string) $input['hedera_api_id'])
+                : $current['hedera_api_id'],
+            'hedera_gateway_host' => isset($input['hedera_gateway_host'])
+                ? sanitize_text_field((string) $input['hedera_gateway_host'])
+                : $current['hedera_gateway_host'],
+            'hedera_api_slug' => isset($input['hedera_api_slug'])
+                ? sanitize_title((string) $input['hedera_api_slug'])
+                : $current['hedera_api_slug'],
             'enabled_token_ids' => array_key_exists('enabled_token_ids', $input)
                 ? self::sanitize_token_ids($input['enabled_token_ids'])
                 : $current['enabled_token_ids'],
@@ -155,6 +225,22 @@ final class Ax402_WC_Settings
         unset($to_store['api_key']);
 
         update_option(self::OPTION_KEY, $to_store, false);
+    }
+
+    public static function sanitize_hedera_account_id(string $value): string
+    {
+        $value = trim(sanitize_text_field($value));
+        if ($value === '') {
+            return '';
+        }
+        if (str_starts_with(strtolower($value), '0x')) {
+            return '';
+        }
+        if (!self::is_valid_hedera_account_id($value)) {
+            return '';
+        }
+
+        return $value;
     }
 
     /**

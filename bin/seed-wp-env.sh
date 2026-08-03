@@ -30,6 +30,8 @@ import json, os
 print(json.dumps({
   "base_url": os.environ.get("AX402_BASE_URL") or "https://api.ax402.io",
   "pay_to_address": os.environ.get("AX402_PAY_TO_ADDRESS") or "",
+  "pay_to_hedera_account_id": os.environ.get("AX402_PAY_TO_HEDERA_ACCOUNT_ID") or "",
+  "walletconnect_project_id": os.environ.get("AX402_WALLETCONNECT_PROJECT_ID") or "",
   "network_mode": os.environ.get("AX402_NETWORK") or "sepolia",
   "api_key": os.environ.get("AX402_API_KEY") or "",
 }))
@@ -50,13 +52,15 @@ $gateway = [
   "description" => "Pay with a wallet token via Ax402",
   "base_url" => (string) ($incoming["base_url"] ?? "https://api.ax402.io"),
   "pay_to_address" => (string) ($incoming["pay_to_address"] ?? ""),
+  "pay_to_hedera_account_id" => (string) ($incoming["pay_to_hedera_account_id"] ?? ""),
+  "walletconnect_project_id" => (string) ($incoming["walletconnect_project_id"] ?? ""),
   "network_mode" => (string) ($incoming["network_mode"] ?? "sepolia"),
 ];
 $current = get_option("woocommerce_ax402_settings", []);
 if (!is_array($current)) {
   $current = [];
 }
-foreach (["base_url", "pay_to_address", "network_mode"] as $key) {
+foreach (["base_url", "pay_to_address", "pay_to_hedera_account_id", "walletconnect_project_id", "network_mode"] as $key) {
   if ($gateway[$key] === "" && !empty($current[$key])) {
     $gateway[$key] = (string) $current[$key];
   }
@@ -70,6 +74,12 @@ if (class_exists("Ax402_WC_Settings")) {
   ];
   if ($gateway["pay_to_address"] !== "") {
     $plugin_update["pay_to_address"] = $gateway["pay_to_address"];
+  }
+  if ($gateway["pay_to_hedera_account_id"] !== "") {
+    $plugin_update["pay_to_hedera_account_id"] = $gateway["pay_to_hedera_account_id"];
+  }
+  if ($gateway["walletconnect_project_id"] !== "") {
+    $plugin_update["walletconnect_project_id"] = $gateway["walletconnect_project_id"];
   }
   $api_key = trim((string) ($incoming["api_key"] ?? ""));
   if ($api_key !== "") {

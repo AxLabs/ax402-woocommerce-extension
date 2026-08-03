@@ -134,4 +134,55 @@ final class PlatformTokensTest extends TestCase
         $this->assertContains('eip155:845320402', $catalog->networks());
         $this->assertNotSame('', $catalog->label('eip155:8453'));
     }
+
+    public function test_hedera_helpers_and_accept_defaults(): void
+    {
+        $this->assertTrue(Ax402_WC_Platform_Tokens::is_hedera_network('hedera:mainnet'));
+        $this->assertTrue(Ax402_WC_Platform_Tokens::is_hedera_network('hedera:testnet'));
+        $this->assertFalse(Ax402_WC_Platform_Tokens::is_hedera_network('eip155:8453'));
+        $this->assertSame('', Ax402_WC_Platform_Tokens::chain_id_hex('hedera:mainnet'));
+        $this->assertTrue(Ax402_WC_Platform_Tokens::is_hedera_native_asset('0.0.0'));
+
+        $hederaToken = [
+            'id' => 'hedera:mainnet:0.0.456',
+            'symbol' => 'USDC',
+            'network' => 'hedera:mainnet',
+            'asset' => '0.0.456',
+            'decimals' => 6,
+            'schemes' => ['exact'],
+            'enabled' => true,
+        ];
+        $accept = Ax402_WC_Platform_Tokens::build_accept($hederaToken, '1000000', 'exact', [
+            'kinds' => [
+                [
+                    'scheme' => 'exact',
+                    'network' => 'hedera:mainnet',
+                    'extra' => ['feePayer' => '0.0.999'],
+                ],
+            ],
+            'signers' => ['hedera:*' => ['0.0.999']],
+        ]);
+        $this->assertSame('hedera:mainnet', $accept['network']);
+        $this->assertArrayNotHasKey('assetTransferMethod', $accept['extra']);
+        $this->assertSame('0.0.999', $accept['extra']['feePayer']);
+
+        $this->assertSame(
+            '0.0.888',
+            Ax402_WC_Platform_Tokens::hedera_fee_payer('hedera:mainnet', [], [
+                'signers' => ['hedera:*' => ['0.0.888']],
+            ])
+        );
+
+        $platform = [
+            'payment_tokens' => [$hederaToken],
+        ];
+        $this->assertTrue(
+            Ax402_WC_Platform_Tokens::has_hedera_token_enabled($platform, [$hederaToken['id']])
+        );
+        $this->assertFalse(
+            Ax402_WC_Platform_Tokens::has_hedera_token_enabled($this->platform, [
+                'eip155:845320402:0x036cbd53842c5426634e7929541ec2318f3dcf7e',
+            ])
+        );
+    }
 }

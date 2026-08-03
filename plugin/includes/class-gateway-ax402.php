@@ -77,10 +77,43 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
                 'default' => '',
             ],
             'pay_to_address' => [
-                'title' => __('Pay-to wallet', 'ax402-for-woocommerce'),
+                'title' => __('EVM pay-to wallet', 'ax402-for-woocommerce'),
                 'type' => 'text',
-                'description' => __('EVM address that receives settlements.', 'ax402-for-woocommerce'),
+                'description' => __(
+                    'Single EVM address that receives settlements on all EVM networks (Base, Neo X, …).',
+                    'ax402-for-woocommerce'
+                ),
                 'default' => $plugin['pay_to_address'],
+                'custom_attributes' => [
+                    'id' => 'woocommerce_ax402_pay_to_address',
+                ],
+            ],
+            'pay_to_hedera_account_id' => [
+                'title' => __('Hedera pay-to account', 'ax402-for-woocommerce'),
+                'type' => 'text',
+                'description' => __(
+                    'Hedera account id (0.0.x) that receives Hedera settlements. Enable a Hedera settlement token below to unlock this field.',
+                    'ax402-for-woocommerce'
+                ),
+                'default' => $plugin['pay_to_hedera_account_id'] ?? '',
+                'custom_attributes' => [
+                    'id' => 'woocommerce_ax402_pay_to_hedera_account_id',
+                    'autocomplete' => 'off',
+                    'data-ax402-hedera-payto' => '1',
+                ],
+            ],
+            'walletconnect_project_id' => [
+                'title' => __('WalletConnect project ID', 'ax402-for-woocommerce'),
+                'type' => 'text',
+                'description' => __(
+                    'Required for shoppers to connect Hedera wallets (HashPack, etc.). Unlock by enabling a Hedera settlement token.',
+                    'ax402-for-woocommerce'
+                ),
+                'default' => $plugin['walletconnect_project_id'] ?? '',
+                'custom_attributes' => [
+                    'id' => 'woocommerce_ax402_walletconnect_project_id',
+                    'data-ax402-hedera-payto' => '1',
+                ],
             ],
             'network_mode' => [
                 'title' => __('Environment seed', 'ax402-for-woocommerce'),
@@ -336,8 +369,11 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
                                     <label style="display:flex;gap:0.65em;align-items:flex-start">
                                         <input
                                             type="checkbox"
+                                            class="ax402-settlement-token"
                                             name="<?php echo esc_attr($field_key); ?>[]"
                                             value="<?php echo esc_attr($id); ?>"
+                                            data-network="<?php echo esc_attr($network); ?>"
+                                            data-hedera="<?php echo Ax402_WC_Platform_Tokens::is_hedera_network($network) ? '1' : '0'; ?>"
                                             <?php checked($checked); ?>
                                             <?php disabled(!$rate_ok); ?>
                                         />
@@ -399,6 +435,33 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
                         'ax402-for-woocommerce'
                     ); ?>
                 </p>
+                <script>
+                (function () {
+                    function syncHederaFields() {
+                        var hederaOn = false;
+                        document.querySelectorAll('input.ax402-settlement-token[data-hedera="1"]:checked:not(:disabled)').forEach(function () {
+                            hederaOn = true;
+                        });
+                        document.querySelectorAll('[data-ax402-hedera-payto="1"]').forEach(function (el) {
+                            el.readOnly = !hederaOn;
+                            if (!hederaOn) {
+                                el.setAttribute('aria-disabled', 'true');
+                            } else {
+                                el.removeAttribute('aria-disabled');
+                            }
+                            if (el.closest('tr')) {
+                                el.closest('tr').style.opacity = hederaOn ? '' : '0.55';
+                            }
+                        });
+                    }
+                    document.addEventListener('change', function (e) {
+                        if (e.target && e.target.classList && e.target.classList.contains('ax402-settlement-token')) {
+                            syncHederaFields();
+                        }
+                    });
+                    syncHederaFields();
+                })();
+                </script>
                 <?php if (!empty($data['description'])) : ?>
                     <p class="description"><?php echo esc_html((string) $data['description']); ?></p>
                 <?php endif; ?>
@@ -434,6 +497,8 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
         $payload = [
             'base_url' => (string) $this->get_option('base_url', 'https://api.ax402.io'),
             'pay_to_address' => (string) $this->get_option('pay_to_address', ''),
+            'pay_to_hedera_account_id' => (string) $this->get_option('pay_to_hedera_account_id', ''),
+            'walletconnect_project_id' => (string) $this->get_option('walletconnect_project_id', ''),
             'network_mode' => (string) $this->get_option('network_mode', 'sepolia'),
             'api_slug' => (string) $this->get_option('api_slug', ''),
             'enabled_token_ids' => $this->get_option('settlement_tokens', []),
@@ -442,6 +507,32 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
 
         if (!is_array($payload['enabled_token_ids'])) {
             $payload['enabled_token_ids'] = [];
+        }
+
+        $platform_preview = Ax402_WC_Platform_Config_Store::platform();
+        $needs_hedera = Ax402_WC_Platform_Tokens::has_hedera_token_enabled(
+            $platform_preview,
+            $payload['enabled_token_ids']
+        );
+        if ($needs_hedera) {
+            $hedera = Ax402_WC_Settings::sanitize_hedera_account_id($payload['pay_to_hedera_account_id']);
+            $payload['pay_to_hedera_account_id'] = $hedera;
+            $this->update_option('pay_to_hedera_account_id', $hedera);
+            if ($hedera === '') {
+                WC_Admin_Settings::add_error(
+                    __('Enable Hedera settlements requires a valid Hedera pay-to account id (0.0.x).', 'ax402-for-woocommerce')
+                );
+            }
+            if (trim($payload['walletconnect_project_id']) === '') {
+                WC_Admin_Settings::add_error(
+                    __('Enable Hedera settlements requires a WalletConnect project ID for shopper wallets.', 'ax402-for-woocommerce')
+                );
+            }
+        } else {
+            // Keep stored value but fields stay greyed in UI when no Hedera token.
+            $payload['pay_to_hedera_account_id'] = Ax402_WC_Settings::sanitize_hedera_account_id(
+                $payload['pay_to_hedera_account_id']
+            );
         }
 
         $api_key = (string) $this->get_option('api_key', '');
@@ -461,6 +552,8 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
         if ($base_url_changed) {
             $payload['api_id'] = '';
             $payload['gateway_host'] = '';
+            $payload['hedera_api_id'] = '';
+            $payload['hedera_gateway_host'] = '';
         }
 
         Ax402_WC_Settings::update($payload);
@@ -522,8 +615,35 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
         }
 
         try {
-            if (Ax402_WC_Settings::client() !== null && $payload['pay_to_address'] !== '') {
-                Ax402_WC_Store_Onboarding::ensure_api();
+            $settings_now = Ax402_WC_Settings::all();
+            $platform_now = Ax402_WC_Platform_Config_Store::platform();
+            $token_ids_now = Ax402_WC_Settings::enabled_token_ids($platform_now);
+            $needs_hedera = Ax402_WC_Platform_Tokens::has_hedera_token_enabled(
+                $platform_now,
+                $token_ids_now
+            );
+            $needs_evm = false;
+            foreach ($token_ids_now as $token_id) {
+                $token = Ax402_WC_Platform_Tokens::find_token_by_id($platform_now, $token_id);
+                if ($token === null) {
+                    continue;
+                }
+                if (!Ax402_WC_Platform_Tokens::is_hedera_network((string) ($token['network'] ?? ''))) {
+                    $needs_evm = true;
+                    break;
+                }
+            }
+            if ($platform_now === [] && $settings_now['pay_to_address'] !== '') {
+                $needs_evm = true;
+            }
+
+            if (Ax402_WC_Settings::client() !== null) {
+                if ($needs_evm && $settings_now['pay_to_address'] !== '') {
+                    Ax402_WC_Store_Onboarding::ensure_api();
+                }
+                if ($needs_hedera && $settings_now['pay_to_hedera_account_id'] !== '') {
+                    Ax402_WC_Store_Onboarding::ensure_hedera_api();
+                }
                 $cors = Ax402_WC_Gateway_Cors::status();
                 if ($cors['error'] !== '') {
                     WC_Admin_Settings::add_error(
@@ -556,11 +676,46 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
         }
 
         $settings = Ax402_WC_Settings::all();
-        if ($settings['api_key'] === '' || $settings['pay_to_address'] === '') {
+        if ($settings['api_key'] === '') {
             return false;
         }
 
-        return Ax402_WC_Settings::enabled_token_ids() !== [];
+        $token_ids = Ax402_WC_Settings::enabled_token_ids();
+        if ($token_ids === []) {
+            return false;
+        }
+
+        $platform = Ax402_WC_Platform_Config_Store::platform();
+        $needs_hedera = Ax402_WC_Platform_Tokens::has_hedera_token_enabled($platform, $token_ids);
+        $needs_evm = false;
+        foreach ($token_ids as $token_id) {
+            $token = Ax402_WC_Platform_Tokens::find_token_by_id($platform, $token_id);
+            if ($token === null) {
+                continue;
+            }
+            if (!Ax402_WC_Platform_Tokens::is_hedera_network((string) ($token['network'] ?? ''))) {
+                $needs_evm = true;
+                break;
+            }
+        }
+        // Default seed tokens are EVM when platform cache is empty.
+        if ($platform === []) {
+            $needs_evm = true;
+        }
+
+        if ($needs_evm && $settings['pay_to_address'] === '') {
+            return false;
+        }
+        if ($needs_hedera) {
+            if (!Ax402_WC_Settings::is_valid_hedera_account_id($settings['pay_to_hedera_account_id'])) {
+                return false;
+            }
+            if (trim($settings['walletconnect_project_id']) === '') {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**

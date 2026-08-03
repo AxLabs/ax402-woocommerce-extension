@@ -71,10 +71,14 @@ final class Ax402_WC_Platform_Tokens
     }
 
     /**
-     * Hex chain id for wallet_switchEthereumChain.
+     * Hex chain id for wallet_switchEthereumChain (EVM only).
      */
     public static function chain_id_hex(string $network): string
     {
+        if (self::is_hedera_network($network)) {
+            return '';
+        }
+
         $id = Ax402_WC_Chain_Metadata::eip155_chain_id($network);
         if ($id === null) {
             return '';
@@ -83,10 +87,49 @@ final class Ax402_WC_Platform_Tokens
         return '0x' . dechex($id);
     }
 
+    public static function is_hedera_network(string $network): bool
+    {
+        return str_starts_with(strtolower(trim($network)), 'hedera:');
+    }
+
+    /**
+     * True when enabled token ids include any Hedera-network token.
+     *
+     * @param array<string, mixed> $platform
+     * @param list<string> $enabled_token_ids
+     */
+    public static function has_hedera_token_enabled(array $platform, array $enabled_token_ids): bool
+    {
+        foreach ($enabled_token_ids as $token_id) {
+            $token = self::find_token_by_id($platform, $token_id);
+            if ($token === null) {
+                continue;
+            }
+            if (self::is_hedera_network((string) ($token['network'] ?? ''))) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public static function is_native_asset(string $asset): bool
     {
         $asset = strtolower(trim($asset));
         return $asset === '' || preg_match('/^0x0+$/', $asset) === 1;
+    }
+
+    /**
+     * Hedera native HBAR asset forms used by platform rows.
+     */
+    public static function is_hedera_native_asset(string $asset): bool
+    {
+        $asset = strtolower(trim($asset));
+        if ($asset === '' || $asset === 'hbar' || $asset === '0.0.0') {
+            return true;
+        }
+
+        return preg_match('/^0x0+$/', $asset) === 1;
     }
 
     /**
@@ -228,6 +271,7 @@ final class Ax402_WC_Platform_Tokens
      *   chain_id_hex:string,
      *   rpc_url:string,
      *   explorer_url:string,
+     *   is_hedera:bool,
      *   accept:array<string,mixed>
      * }>
      */
@@ -241,6 +285,7 @@ final class Ax402_WC_Platform_Tokens
     ): array {
         $rates ??= Ax402_WC_Composite_Exchange_Rates::default();
         $catalog ??= self::catalog($platform);
+        $supported_networks = self::supported_networks_payload();
         $options = [];
 
         foreach ($enabled_token_ids as $token_id) {
@@ -264,7 +309,7 @@ final class Ax402_WC_Platform_Tokens
             try {
                 $amount = Ax402_WC_Money::usd_to_token_amount($usd_total, $rate, $decimals);
                 $atomic = Ax402_WC_Money::to_atomic($amount, $decimals);
-                $accept = self::build_accept($token, $atomic, $scheme);
+                $accept = self::build_accept($token, $atomic, $scheme, $supported_networks);
             } catch (Throwable $e) {
                 continue;
             }
@@ -273,6 +318,7 @@ final class Ax402_WC_Platform_Tokens
             $label = $meta['label'] !== '' ? $meta['label'] : $catalog->label($network);
             $rpc = $meta['rpc_url'] !== '' ? $meta['rpc_url'] : $catalog->rpc_url($network);
             $explorer = $meta['explorer_url'] !== '' ? $meta['explorer_url'] : $catalog->explorer_url($network);
+            $is_hedera = self::is_hedera_network($network);
 
             $options[] = [
                 'token_id' => $token_id,
@@ -288,6 +334,7 @@ final class Ax402_WC_Platform_Tokens
                 'chain_id_hex' => self::chain_id_hex($network),
                 'rpc_url' => $rpc,
                 'explorer_url' => $explorer,
+                'is_hedera' => $is_hedera,
                 'accept' => $accept,
             ];
         }
@@ -297,30 +344,127 @@ final class Ax402_WC_Platform_Tokens
 
     /**
      * @param array<string, mixed> $token
+     * @param array<string, mixed>|null $supported_networks Facilitator /supported-networks payload
      * @return array{scheme:string,network:string,asset:string,amount:string,max_timeout_seconds:int,extra:array<string,mixed>}
      */
-    public static function build_accept(array $token, string $amount_atomic, string $scheme = 'exact'): array
-    {
+    public static function build_accept(
+        array $token,
+        string $amount_atomic,
+        string $scheme = 'exact',
+        ?array $supported_networks = null
+    ): array {
         $schemes = $token['schemes'] ?? ['exact'];
         if (!is_array($schemes) || !in_array($scheme, $schemes, true)) {
             throw new InvalidArgumentException('Scheme ' . $scheme . ' is not supported for this token');
         }
 
         $symbol = (string) ($token['symbol'] ?? 'TOKEN');
-        $extra = is_array($token['extra'] ?? null) ? $token['extra'] : [
-            'name' => $symbol,
-            'version' => '2',
-            'assetTransferMethod' => 'eip3009',
-        ];
+        $network = (string) ($token['network'] ?? '');
+        if (is_array($token['extra'] ?? null)) {
+            $extra = $token['extra'];
+        } elseif (self::is_hedera_network($network)) {
+            // Do not inject EVM eip3009 defaults for Hedera tokens.
+            $extra = [
+                'name' => $symbol,
+            ];
+        } else {
+            $extra = [
+                'name' => $symbol,
+                'version' => '2',
+                'assetTransferMethod' => 'eip3009',
+            ];
+        }
+
+        if (self::is_hedera_network($network)) {
+            $fee_payer = self::hedera_fee_payer($network, $extra, $supported_networks);
+            if ($fee_payer === '') {
+                throw new RuntimeException(
+                    'Hedera facilitator feePayer is required in payment requirements (missing from token extra and /supported-networks)'
+                );
+            }
+            $extra['feePayer'] = $fee_payer;
+        }
 
         return [
             'scheme' => $scheme,
-            'network' => (string) $token['network'],
+            'network' => $network,
             'asset' => (string) $token['asset'],
             'amount' => $amount_atomic,
             'max_timeout_seconds' => 300,
             'extra' => $extra,
         ];
+    }
+
+    /**
+     * Resolve facilitator fee-payer for Hedera exact payments.
+     *
+     * Buyer signs a TransferTransaction with transactionId.accountId = feePayer;
+     * facilitator co-signs and pays network fees at settle time.
+     *
+     * @param array<string, mixed> $extra
+     * @param array<string, mixed>|null $supported_networks
+     */
+    public static function hedera_fee_payer(
+        string $network,
+        array $extra = [],
+        ?array $supported_networks = null
+    ): string {
+        $from_extra = trim((string) ($extra['feePayer'] ?? $extra['fee_payer'] ?? ''));
+        if ($from_extra !== '') {
+            return $from_extra;
+        }
+
+        $supported_networks ??= self::supported_networks_payload();
+        if (!is_array($supported_networks)) {
+            return '';
+        }
+
+        $kinds = $supported_networks['kinds'] ?? null;
+        if (is_array($kinds)) {
+            $network_l = strtolower(trim($network));
+            foreach ($kinds as $kind) {
+                if (!is_array($kind)) {
+                    continue;
+                }
+                if (strtolower(trim((string) ($kind['network'] ?? ''))) !== $network_l) {
+                    continue;
+                }
+                $kind_extra = is_array($kind['extra'] ?? null) ? $kind['extra'] : [];
+                $fee = trim((string) ($kind_extra['feePayer'] ?? $kind_extra['fee_payer'] ?? ''));
+                if ($fee !== '') {
+                    return $fee;
+                }
+            }
+        }
+
+        $signers = $supported_networks['signers'] ?? null;
+        if (is_array($signers)) {
+            foreach ([$network, 'hedera:*'] as $key) {
+                $list = $signers[$key] ?? null;
+                if (!is_array($list) || $list === []) {
+                    continue;
+                }
+                $fee = trim((string) $list[0]);
+                if ($fee !== '') {
+                    return $fee;
+                }
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private static function supported_networks_payload(): ?array
+    {
+        if (!class_exists('Ax402_WC_Platform_Config_Store') || !function_exists('get_option')) {
+            return null;
+        }
+
+        $supported = Ax402_WC_Platform_Config_Store::get()['supported_networks'] ?? null;
+        return is_array($supported) ? $supported : null;
     }
 
     /**

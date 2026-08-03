@@ -10,24 +10,31 @@ final class Ax402_WC_Fulfill_Controller
 {
     public function register(): void
     {
+        $args = [
+            'methods' => WP_REST_Server::READABLE,
+            'callback' => [$this, 'fulfill'],
+            'permission_callback' => '__return_true',
+            'args' => [
+                'order_key' => [
+                    'required' => true,
+                    'type' => 'string',
+                ],
+                'fulfill_token' => [
+                    'required' => true,
+                    'type' => 'string',
+                ],
+            ],
+        ];
+
         register_rest_route(
             'ax402/v1',
             '/fulfill/(?P<order_key>[A-Za-z0-9_-]+)/(?P<fulfill_token>[A-Fa-f0-9]+)',
-            [
-                'methods' => WP_REST_Server::READABLE,
-                'callback' => [$this, 'fulfill'],
-                'permission_callback' => '__return_true',
-                'args' => [
-                    'order_key' => [
-                        'required' => true,
-                        'type' => 'string',
-                    ],
-                    'fulfill_token' => [
-                        'required' => true,
-                        'type' => 'string',
-                    ],
-                ],
-            ]
+            $args
+        );
+        register_rest_route(
+            'ax402/v1',
+            '/fulfill/(?P<order_key>[A-Za-z0-9_-]+)/(?P<fulfill_token>[A-Fa-f0-9]+)/(?P<token_slug>[A-Fa-f0-9]+)',
+            $args
         );
     }
 
