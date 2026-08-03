@@ -4,10 +4,6 @@ declare(strict_types=1);
 $root = dirname(__DIR__, 2);
 $plugin = $root . '/plugin';
 
-require_once $plugin . '/includes/class-money.php';
-require_once $plugin . '/includes/class-platform-tokens.php';
-require_once $plugin . '/includes/class-control-plane-client.php';
-
 // Lightweight stubs for classes that optionally touch WP in unit tests.
 if (!defined('ABSPATH')) {
     define('ABSPATH', $root . '/');
@@ -19,11 +15,15 @@ if (!defined('AX402_WC_PLUGIN_DIR')) {
     define('AX402_WC_PLUGIN_DIR', $plugin . '/');
 }
 if (!defined('AX402_WC_PLUGIN_URL')) {
-    define('AX402_WC_PLUGIN_URL', 'http://example.test/wp-content/plugins/ax402-woocommerce/');
+    define('AX402_WC_PLUGIN_URL', 'http://example.test/wp-content/plugins/ax402-for-woocommerce/');
 }
 if (!defined('AX402_WC_PLUGIN_FILE')) {
-    define('AX402_WC_PLUGIN_FILE', $plugin . '/ax402-woocommerce.php');
+    define('AX402_WC_PLUGIN_FILE', $plugin . '/ax402-for-woocommerce.php');
 }
+
+require_once $plugin . '/includes/class-money.php';
+require_once $plugin . '/includes/class-platform-tokens.php';
+require_once $plugin . '/includes/class-control-plane-client.php';
 
 spl_autoload_register(static function (string $class): void {
     if (!str_starts_with($class, 'Ax402_WC_')) {

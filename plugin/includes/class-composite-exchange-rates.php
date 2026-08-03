@@ -1,6 +1,9 @@
 <?php
 declare(strict_types=1);
 
+defined('ABSPATH') || exit;
+
+
 /**
  * Tries providers in order; first non-null rate wins.
  */

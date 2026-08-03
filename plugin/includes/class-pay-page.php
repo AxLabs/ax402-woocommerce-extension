@@ -42,13 +42,13 @@ final class Ax402_WC_Pay_Page
             '%1$s <a href="%2$s" class="button">%3$s</a>',
             esc_html__(
                 'This order is still awaiting Ax402 payment. Continue to the wallet pay page to finish checkout.',
-                'ax402-woocommerce'
+                'ax402-for-woocommerce'
             ),
             esc_url($pay_url),
             esc_html(
                 sprintf(
                     /* translators: %d: order number */
-                    __('Continue payment for order #%d', 'ax402-woocommerce'),
+                    __('Continue payment for order #%d', 'ax402-for-woocommerce'),
                     $order->get_id()
                 )
             )
@@ -229,19 +229,19 @@ final class Ax402_WC_Pay_Page
 
         $key = isset($_GET['key']) ? sanitize_text_field(wp_unslash((string) $_GET['key'])) : '';
         if ($key === '') {
-            wp_die(esc_html__('Missing order key.', 'ax402-woocommerce'), 400);
+            wp_die(esc_html__('Missing order key.', 'ax402-for-woocommerce'), 400);
         }
 
         $order_id = wc_get_order_id_by_order_key($key);
         $order = $order_id ? wc_get_order($order_id) : false;
         if (!$order instanceof WC_Order) {
-            wp_die(esc_html__('Order not found.', 'ax402-woocommerce'), 404);
+            wp_die(esc_html__('Order not found.', 'ax402-for-woocommerce'), 404);
         }
 
         Ax402_WC_Settlement_Reconcile::reconcile_order($order);
         $order = wc_get_order($order->get_id());
         if (!$order instanceof WC_Order) {
-            wp_die(esc_html__('Order not found.', 'ax402-woocommerce'), 404);
+            wp_die(esc_html__('Order not found.', 'ax402-for-woocommerce'), 404);
         }
 
         if ($order->is_paid()) {
@@ -253,7 +253,7 @@ final class Ax402_WC_Pay_Page
             Ax402_WC_Order_Payment::ensure_current_settlement_options($order);
             $order = wc_get_order($order->get_id());
             if (!$order instanceof WC_Order) {
-                wp_die(esc_html__('Order not found.', 'ax402-woocommerce'), 404);
+                wp_die(esc_html__('Order not found.', 'ax402-for-woocommerce'), 404);
             }
             $gateway_url = $this->resolve_gateway_url($order);
         } catch (Throwable $e) {
@@ -261,18 +261,17 @@ final class Ax402_WC_Pay_Page
                 esc_html(
                     sprintf(
                         /* translators: %s: error message */
-                        __('Payment is not ready yet: %s', 'ax402-woocommerce'),
+                        __('Payment is not ready yet: %s', 'ax402-for-woocommerce'),
                         $e->getMessage()
                     )
                 ),
-                esc_html__('Ax402 payment', 'ax402-woocommerce'),
+                esc_html__('Ax402 payment', 'ax402-for-woocommerce'),
                 ['response' => 409]
             );
         }
 
         $config = $this->page_config($order, $gateway_url);
         $asset = $this->asset_meta();
-        $config_json = wp_json_encode($config);
 
         // Register + enqueue before any localize/inline data (template_redirect runs before wp_enqueue_scripts).
         wp_register_script(
@@ -293,11 +292,10 @@ final class Ax402_WC_Pay_Page
         wp_enqueue_style('ax402-wc-pay-page');
 
         // Prefer inline bootstrap so React never mounts without config.
-        wp_add_inline_script(
-            'ax402-wc-pay-page',
-            'window.ax402PayPage = ' . $config_json . ';',
-            'before'
-        );
+        $boot = 'window.ax402PayPage = '
+            . (wp_json_encode($config, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?: '{}')
+            . ';';
+        wp_add_inline_script('ax402-wc-pay-page', $boot, 'before');
 
         status_header(200);
         nocache_headers();
@@ -307,7 +305,7 @@ final class Ax402_WC_Pay_Page
 <head>
     <meta charset="<?php bloginfo('charset'); ?>" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title><?php echo esc_html__('Pay with Ax402', 'ax402-woocommerce'); ?></title>
+    <title><?php echo esc_html__('Pay with Ax402', 'ax402-for-woocommerce'); ?></title>
     <?php wp_head(); ?>
     <style>
         :root {
@@ -691,21 +689,21 @@ final class Ax402_WC_Pay_Page
 <body class="ax402-pay-body">
     <main class="ax402-pay-shell">
         <p class="ax402-pay-brand">Ax402</p>
-        <h1><?php echo esc_html__('Pay securely with your wallet', 'ax402-woocommerce'); ?></h1>
+        <h1><?php echo esc_html__('Pay securely with your wallet', 'ax402-for-woocommerce'); ?></h1>
         <p class="ax402-pay-lead">
             <?php
             $option_count = count($config['settlementOptions'] ?? []);
             echo esc_html(
                 $option_count > 1
-                    ? __('Choose a settlement token, then connect and just sign the payment. We finalize the order automatically.', 'ax402-woocommerce')
-                    : __('Connect and just sign the payment. We finalize the order automatically.', 'ax402-woocommerce')
+                    ? __('Choose a settlement token, then connect and just sign the payment. We finalize the order automatically.', 'ax402-for-woocommerce')
+                    : __('Connect and just sign the payment. We finalize the order automatically.', 'ax402-for-woocommerce')
             );
             ?>
             <span class="ax402-info" data-ax402-info>
                 <button
                     type="button"
                     class="ax402-info-btn"
-                    aria-label="<?php echo esc_attr__('No network fees required. We cover them for you.', 'ax402-woocommerce'); ?>"
+                    aria-label="<?php echo esc_attr__('No network fees required. We cover them for you.', 'ax402-for-woocommerce'); ?>"
                     aria-describedby="ax402-fee-tip"
                     aria-expanded="false"
                 >
@@ -716,19 +714,19 @@ final class Ax402_WC_Pay_Page
                     </svg>
                 </button>
                 <span class="ax402-info-tip" id="ax402-fee-tip" role="tooltip">
-                    <?php echo esc_html__('No network fees required. We cover them for you.', 'ax402-woocommerce'); ?>
+                    <?php echo esc_html__('No network fees required. We cover them for you.', 'ax402-for-woocommerce'); ?>
                 </span>
             </span>
         </p>
         <section class="ax402-pay-card">
             <div id="ax402-pay-root">
-                <p class="ax402-pay-loading"><?php echo esc_html__('Loading payment…', 'ax402-woocommerce'); ?></p>
+                <p class="ax402-pay-loading"><?php echo esc_html__('Loading payment…', 'ax402-for-woocommerce'); ?></p>
             </div>
         </section>
         <p class="ax402-pay-help">
-            <?php echo esc_html__('Use the network shown for your selected token. Need to leave?', 'ax402-woocommerce'); ?>
+            <?php echo esc_html__('Use the network shown for your selected token. Need to leave?', 'ax402-for-woocommerce'); ?>
             <a href="<?php echo esc_url((string) $config['shopUrl']); ?>">
-                <?php echo esc_html__('Return to shop', 'ax402-woocommerce'); ?>
+                <?php echo esc_html__('Return to shop', 'ax402-for-woocommerce'); ?>
             </a>
             <span class="ax402-pay-help-sep" aria-hidden="true">·</span>
             <a href="<?php echo esc_url((string) ($config['orderUrl'] ?? $config['thankYouUrl'])); ?>">
@@ -736,15 +734,19 @@ final class Ax402_WC_Pay_Page
                 echo esc_html(
                     sprintf(
                         /* translators: %d: order number */
-                        __('Order details #%d', 'ax402-woocommerce'),
+                        __('Order details #%d', 'ax402-for-woocommerce'),
                         (int) ($config['orderId'] ?? 0)
                     )
                 );
                 ?>
             </a>
         </p>
+        <?php
+        $gateway = new Ax402_WC_Gateway_Ax402();
+        if ($gateway->get_option('show_powered_by', 'no') === 'yes') :
+            ?>
         <p class="ax402-pay-powered">
-            <?php echo esc_html__('Powered by', 'ax402-woocommerce'); ?>
+            <?php echo esc_html__('Powered by', 'ax402-for-woocommerce'); ?>
             <a href="https://ax402.io" target="_blank" rel="noopener noreferrer">
                 Ax402
                 <svg class="ax402-ext-icon" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
@@ -753,12 +755,13 @@ final class Ax402_WC_Pay_Page
                         d="M6.5 2.5a.75.75 0 0 0 0 1.5h4.19L3.22 11.47a.75.75 0 1 0 1.06 1.06L11.75 5.06v4.19a.75.75 0 0 0 1.5 0v-6a.75.75 0 0 0-.75-.75h-6z"
                     />
                 </svg>
-                <span class="screen-reader-text"><?php echo esc_html__('(opens in a new tab)', 'ax402-woocommerce'); ?></span>
+                <span class="screen-reader-text"><?php echo esc_html__('(opens in a new tab)', 'ax402-for-woocommerce'); ?></span>
             </a>
         </p>
+        <?php endif; ?>
     </main>
     <script>
-        window.ax402PayPage = <?php echo $config_json ? $config_json : '{}'; ?>;
+        window.ax402PayPage = <?php echo wp_json_encode($config, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?: '{}'; ?>;
         (function () {
             var root = document.querySelector('[data-ax402-info]');
             if (!root) return;

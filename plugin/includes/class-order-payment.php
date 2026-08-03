@@ -115,7 +115,7 @@ final class Ax402_WC_Order_Payment
         $order->add_order_note(
             sprintf(
                 /* translators: 1: USD amount 2: token symbols 3: gateway URL */
-                __('Ax402 payment prepared for %1$s USD (%2$s). Gateway: %3$s', 'ax402-woocommerce'),
+                __('Ax402 payment prepared for %1$s USD (%2$s). Gateway: %3$s', 'ax402-for-woocommerce'),
                 $amount_usd,
                 $symbols,
                 $gateway_url

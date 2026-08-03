@@ -1,6 +1,9 @@
 <?php
 declare(strict_types=1);
 
+defined('ABSPATH') || exit;
+
+
 /**
  * Ax402 control-plane HTTP client (greenfield).
  */
@@ -432,83 +435,44 @@ final class Ax402_WC_Control_Plane_Client
     }
 
     /**
-     * Default HTTP transport: WordPress when available, otherwise cURL.
+     * HTTP transport via the WordPress HTTP API.
      *
      * @param array<string, mixed>|null $body
      * @return array{status:int,body:string,error?:string}
      */
     private function wp_http(string $method, string $url, ?array $body): array
     {
-        if (function_exists('wp_remote_request')) {
-            $args = [
-                'method' => $method,
-                'headers' => [
-                    'Content-Type' => 'application/json',
-                    'Accept' => 'application/json',
-                    'X-API-Key' => $this->api_key,
-                ],
-                'timeout' => 30,
-            ];
-            if ($body !== null) {
-                $args['body'] = function_exists('wp_json_encode')
-                    ? wp_json_encode($body)
-                    : json_encode($body);
-            }
-
-            $response = wp_remote_request($url, $args);
-            if (is_wp_error($response)) {
-                return ['status' => 0, 'body' => '', 'error' => $response->get_error_message()];
-            }
-
+        if (!function_exists('wp_remote_request')) {
             return [
-                'status' => (int) wp_remote_retrieve_response_code($response),
-                'body' => (string) wp_remote_retrieve_body($response),
+                'status' => 0,
+                'body' => '',
+                'error' => 'WordPress HTTP API (wp_remote_request) is unavailable',
             ];
         }
 
-        return $this->curl_http($method, $url, $body);
-    }
-
-    /**
-     * @param array<string, mixed>|null $body
-     * @return array{status:int,body:string,error?:string}
-     */
-    private function curl_http(string $method, string $url, ?array $body): array
-    {
-        if (!function_exists('curl_init')) {
-            return ['status' => 0, 'body' => '', 'error' => 'cURL unavailable'];
-        }
-
-        $ch = curl_init($url);
-        if ($ch === false) {
-            return ['status' => 0, 'body' => '', 'error' => 'curl_init failed'];
-        }
-
-        $headers = [
-            'Content-Type: application/json',
-            'Accept: application/json',
-            'X-API-Key: ' . $this->api_key,
+        $args = [
+            'method' => $method,
+            'headers' => [
+                'Content-Type' => 'application/json',
+                'Accept' => 'application/json',
+                'X-API-Key' => $this->api_key,
+            ],
+            'timeout' => 30,
         ];
-
-        curl_setopt_array($ch, [
-            CURLOPT_CUSTOMREQUEST => $method,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_HTTPHEADER => $headers,
-            CURLOPT_TIMEOUT => 30,
-        ]);
-
         if ($body !== null) {
-            curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($body));
+            $args['body'] = function_exists('wp_json_encode')
+                ? wp_json_encode($body)
+                : json_encode($body);
         }
 
-        $responseBody = curl_exec($ch);
-        if ($responseBody === false) {
-            $error = curl_error($ch);
-            return ['status' => 0, 'body' => '', 'error' => $error ?: 'curl_exec failed'];
+        $response = wp_remote_request($url, $args);
+        if (is_wp_error($response)) {
+            return ['status' => 0, 'body' => '', 'error' => $response->get_error_message()];
         }
 
-        $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-
-        return ['status' => $status, 'body' => (string) $responseBody];
+        return [
+            'status' => (int) wp_remote_retrieve_response_code($response),
+            'body' => (string) wp_remote_retrieve_body($response),
+        ];
     }
 }

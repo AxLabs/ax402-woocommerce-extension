@@ -26,8 +26,8 @@ All of these must match before tagging:
 
 | Location | Field |
 |---|---|
-| `plugin/ax402-woocommerce.php` | Header `* Version:` |
-| `plugin/ax402-woocommerce.php` | `AX402_WC_VERSION` constant |
+| `plugin/ax402-for-woocommerce.php` | Header `* Version:` |
+| `plugin/ax402-for-woocommerce.php` | `AX402_WC_VERSION` constant |
 | `plugin/readme.txt` | `Stable tag:` |
 | `package.json` | `"version"` |
 | `plugin/package.json` | `"version"` |
@@ -48,7 +48,7 @@ Do **not** hand-edit only one file. Prefer `bump-version.sh`.
 
 ```bash
 npm run package
-# → dist/ax402-woocommerce-<version>.zip
+# → dist/ax402-for-woocommerce-<version>.zip
 ```
 
 The zip is the installable WordPress plugin (built JS included; `node_modules` / `src` excluded). See `bin/package-plugin.sh`.
@@ -73,7 +73,7 @@ bash bin/bump-version.sh 0.2.0
 
 # Edit plugin/readme.txt Changelog for = 0.2.0 = if bump did not (Stable tag only).
 
-git add plugin/ax402-woocommerce.php plugin/readme.txt package.json plugin/package.json
+git add plugin/ax402-for-woocommerce.php plugin/readme.txt package.json plugin/package.json
 git commit -m "Release v0.2.0"
 git push origin main
 ```
@@ -96,7 +96,7 @@ On `push` of tags `v*.*.*` it will:
 1. Reclaim self-hosted workspace ownership (same as CI)
 2. `bash bin/check-version.sh <tag>`
 3. Install deps, `npm run package`
-4. `gh release create` with `dist/ax402-woocommerce-<version>.zip` attached
+4. `gh release create` with `dist/ax402-for-woocommerce-<version>.zip` attached
 
 Inspect: **GitHub → Releases** (or `gh release view v0.2.0`).
 
@@ -127,7 +127,7 @@ If Actions is unavailable:
 bash bin/check-version.sh v0.2.0
 npm ci && npm --prefix plugin ci
 npm run package
-gh release create v0.2.0 "dist/ax402-woocommerce-0.2.0.zip" \
+gh release create v0.2.0 "dist/ax402-for-woocommerce-0.2.0.zip" \
   --title "v0.2.0" \
   --generate-notes \
   --verify-tag

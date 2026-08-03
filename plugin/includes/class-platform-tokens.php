@@ -1,6 +1,9 @@
 <?php
 declare(strict_types=1);
 
+defined('ABSPATH') || exit;
+
+
 /**
  * Build x402 accept options from Ax402 /config/platform payment tokens.
  *

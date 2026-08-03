@@ -1,6 +1,9 @@
 <?php
 declare(strict_types=1);
 
+defined('ABSPATH') || exit;
+
+
 /**
  * Live Ax402 control-plane exchange rates (`GET /exchange-rates?quote=usd`).
  *

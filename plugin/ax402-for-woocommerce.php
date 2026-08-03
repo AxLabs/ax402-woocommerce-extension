@@ -8,7 +8,7 @@
  * Author URI: https://axlabs.com
  * Developer: AxLabs
  * Developer URI: https://axlabs.com
- * Text Domain: ax402-woocommerce
+ * Text Domain: ax402-for-woocommerce
  * Domain Path: /languages
  * Requires at least: 6.0
  * Requires PHP: 8.1
@@ -40,8 +40,8 @@ function ax402_wc_activate(): void
     if (!class_exists('WooCommerce')) {
         deactivate_plugins(AX402_WC_PLUGIN_BASENAME);
         wp_die(
-            esc_html__('Ax402 for WooCommerce requires WooCommerce to be active.', 'ax402-woocommerce'),
-            esc_html__('Plugin dependency check', 'ax402-woocommerce'),
+            esc_html__('Ax402 for WooCommerce requires WooCommerce to be active.', 'ax402-for-woocommerce'),
+            esc_html__('Plugin dependency check', 'ax402-for-woocommerce'),
             ['back_link' => true]
         );
     }
@@ -75,7 +75,7 @@ function ax402_wc_init(): void
     if (!class_exists('WooCommerce')) {
         add_action('admin_notices', static function (): void {
             echo '<div class="notice notice-error"><p>';
-            echo esc_html__('Ax402 for WooCommerce requires WooCommerce.', 'ax402-woocommerce');
+            echo esc_html__('Ax402 for WooCommerce requires WooCommerce.', 'ax402-for-woocommerce');
             echo '</p></div>';
         });
         return;

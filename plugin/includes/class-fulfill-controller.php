@@ -80,10 +80,10 @@ final class Ax402_WC_Fulfill_Controller
         }
 
         $order->payment_complete();
-        $order->add_order_note(__('Ax402 payment verified via fulfill upstream.', 'ax402-woocommerce'));
+        $order->add_order_note(__('Ax402 payment verified via fulfill upstream.', 'ax402-for-woocommerce'));
 
         if ($this->order_is_virtual_downloadable($order) && $order->has_status('processing')) {
-            $order->update_status('completed', __('Virtual/downloadable order auto-completed after Ax402 payment.', 'ax402-woocommerce'));
+            $order->update_status('completed', __('Virtual/downloadable order auto-completed after Ax402 payment.', 'ax402-for-woocommerce'));
         }
 
         Ax402_WC_Order_Payment::delete_endpoint_for_order($order);

@@ -1,5 +1,5 @@
 {
-  "name": "axlabs/ax402-woocommerce",
+  "name": "axlabs/ax402-for-woocommerce",
   "description": "Ax402 payment gateway for WooCommerce",
   "type": "wordpress-plugin",
   "license": "GPL-3.0-or-later",

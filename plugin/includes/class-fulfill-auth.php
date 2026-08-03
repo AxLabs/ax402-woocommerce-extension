@@ -1,6 +1,9 @@
 <?php
 declare(strict_types=1);
 
+defined('ABSPATH') || exit;
+
+
 /**
  * Pure helpers for fulfill token checks (unit-testable).
  */

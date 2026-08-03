@@ -45,7 +45,7 @@ jobs:
         run: |
           TAG="${GITHUB_REF_NAME}"
           VERSION="${TAG#v}"
-          ZIP="dist/ax402-woocommerce-${VERSION}.zip"
+          ZIP="dist/ax402-for-woocommerce-${VERSION}.zip"
           if [[ ! -f "$ZIP" ]]; then
             echo "Missing package artifact: $ZIP" >&2
             ls -la dist || true
@@ -58,7 +58,7 @@ jobs:
             echo
             echo "WordPress plugin package: \`$(basename "$ZIP")\`"
             echo
-            echo "Install: upload/unzip into \`wp-content/plugins/\` (folder name \`ax402-woocommerce\` after extract if needed), or upload the zip via WP Admin → Plugins → Add New."
+            echo "Install: upload/unzip into \`wp-content/plugins/\` (folder name \`ax402-for-woocommerce\`), or upload the zip via WP Admin → Plugins → Add New."
             echo
             if [[ -f plugin/readme.txt ]]; then
               echo "### Changelog (from readme.txt)"

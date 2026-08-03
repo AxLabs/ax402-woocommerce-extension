@@ -218,7 +218,7 @@ ax402-woocommerce-extension/
 │   └── package-plugin.sh
 ├── docs/                    # this documentation
 ├── plugin/                  # WordPress plugin (mounted into wp-env)
-│   ├── ax402-woocommerce.php
+│   ├── ax402-for-woocommerce.php
 │   ├── includes/            # PHP gateway, REST, settings
 │   ├── src/                 # JS sources (pay-page, blocks)
 │   ├── build/               # compiled assets

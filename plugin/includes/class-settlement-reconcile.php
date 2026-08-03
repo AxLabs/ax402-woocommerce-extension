@@ -167,7 +167,7 @@ final class Ax402_WC_Settlement_Reconcile
         $order->add_order_note(
             sprintf(
                 /* translators: 1: settlement id 2: transaction hash */
-                __('Ax402 payment verified via settlement reconcile (settlement %1$s, tx %2$s). Gateway upstream fulfill was missing.', 'ax402-woocommerce'),
+                __('Ax402 payment verified via settlement reconcile (settlement %1$s, tx %2$s). Gateway upstream fulfill was missing.', 'ax402-for-woocommerce'),
                 (string) ($match['id'] ?? ''),
                 $tx !== '' ? $tx : 'n/a'
             )
@@ -176,7 +176,7 @@ final class Ax402_WC_Settlement_Reconcile
         if (self::order_is_virtual_downloadable($order) && $order->has_status('processing')) {
             $order->update_status(
                 'completed',
-                __('Virtual/downloadable order auto-completed after Ax402 payment.', 'ax402-woocommerce')
+                __('Virtual/downloadable order auto-completed after Ax402 payment.', 'ax402-for-woocommerce')
             );
         }
 

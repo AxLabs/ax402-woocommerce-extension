@@ -54,7 +54,7 @@ final class Ax402_WC_Blocks_Support extends AbstractPaymentMethodType
         );
 
         if (function_exists('wp_set_script_translations')) {
-            wp_set_script_translations('ax402-wc-blocks', 'ax402-woocommerce');
+            wp_set_script_translations('ax402-wc-blocks', 'ax402-for-woocommerce');
         }
 
         return ['ax402-wc-blocks'];

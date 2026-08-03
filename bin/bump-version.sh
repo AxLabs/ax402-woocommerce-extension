@@ -12,7 +12,7 @@ if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
   exit 1
 fi
 
-PLUGIN_MAIN="$ROOT/plugin/ax402-woocommerce.php"
+PLUGIN_MAIN="$ROOT/plugin/ax402-for-woocommerce.php"
 README_TXT="$ROOT/plugin/readme.txt"
 
 for f in "$PLUGIN_MAIN" "$README_TXT" "$ROOT/package.json" "$ROOT/plugin/package.json"; do

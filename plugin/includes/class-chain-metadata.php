@@ -1,6 +1,9 @@
 <?php
 declare(strict_types=1);
 
+defined('ABSPATH') || exit;
+
+
 /**
  * Resolve EVM chain display name / public RPC / explorer from dynamic metadata.
  *
@@ -211,31 +214,23 @@ final class Ax402_WC_Chain_Metadata
 
     private static function fetch_chainlist_json(): string
     {
-        if (function_exists('wp_remote_get')) {
-            $response = wp_remote_get(self::CHAINLIST_URL, [
-                'timeout' => 15,
-                'headers' => ['Accept' => 'application/json'],
-            ]);
-            if (is_wp_error($response)) {
-                return '';
-            }
-            $code = (int) wp_remote_retrieve_response_code($response);
-            if ($code < 200 || $code >= 300) {
-                return '';
-            }
-
-            return (string) wp_remote_retrieve_body($response);
+        if (!function_exists('wp_remote_get')) {
+            return '';
         }
 
-        $ctx = stream_context_create([
-            'http' => [
-                'timeout' => 15,
-                'header' => "Accept: application/json\r\n",
-            ],
+        $response = wp_remote_get(self::CHAINLIST_URL, [
+            'timeout' => 15,
+            'headers' => ['Accept' => 'application/json'],
         ]);
-        $body = @file_get_contents(self::CHAINLIST_URL, false, $ctx);
+        if (is_wp_error($response)) {
+            return '';
+        }
+        $code = (int) wp_remote_retrieve_response_code($response);
+        if ($code < 200 || $code >= 300) {
+            return '';
+        }
 
-        return is_string($body) ? $body : '';
+        return (string) wp_remote_retrieve_body($response);
     }
 
     /** @internal tests */

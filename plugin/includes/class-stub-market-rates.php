@@ -1,6 +1,9 @@
 <?php
 declare(strict_types=1);
 
+defined('ABSPATH') || exit;
+
+
 /**
  * Offline / test fallback when the control-plane FX client is unavailable.
  * Always returns null so non-stable tokens are omitted without a live rate.

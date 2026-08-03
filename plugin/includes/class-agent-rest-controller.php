@@ -124,7 +124,7 @@ final class Ax402_WC_Agent_Rest_Controller
         $order->set_payment_method(Ax402_WC_Gateway_Ax402::GATEWAY_ID);
         $order->set_payment_method_title('Ax402');
         $order->calculate_totals();
-        $order->update_status('pending', __('Agent order awaiting Ax402 payment.', 'ax402-woocommerce'));
+        $order->update_status('pending', __('Agent order awaiting Ax402 payment.', 'ax402-for-woocommerce'));
 
         try {
             $payment = Ax402_WC_Order_Payment::prepare($order);

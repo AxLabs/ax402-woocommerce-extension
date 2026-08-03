@@ -1,6 +1,9 @@
 <?php
 declare(strict_types=1);
 
+defined('ABSPATH') || exit;
+
+
 /**
  * Dynamic network catalog derived from Ax402 platform tokens (+ optional /supported-networks).
  */
