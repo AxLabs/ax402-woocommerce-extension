@@ -3,12 +3,14 @@ declare(strict_types=1);
 
 defined('ABSPATH') || exit;
 
-
 /**
- * Live Ax402 control-plane exchange rates (`GET /exchange-rates?quote=usd`).
+ * Live Ax402 control-plane exchange rates (`GET /exchange-rates?quote=usd&date=YYYY-MM-DD`).
  *
  * API `rate` values are quote-currency prices per 1 token (USD per token from CoinGecko).
  * This provider converts them to tokens-per-1-USD for {@see Ax402_WC_Money::usd_to_token_amount()}.
+ *
+ * Fetch strategy: try "today", then calendar "yesterday"; if both are empty or error,
+ * fall back to the closest previous business day (Mon–Fri).
  */
 final class Ax402_WC_Control_Plane_Exchange_Rates implements Ax402_WC_Exchange_Rate_Provider
 {
@@ -23,10 +25,17 @@ final class Ax402_WC_Control_Plane_Exchange_Rates implements Ax402_WC_Exchange_R
 
     private bool $force_refresh;
 
-    public function __construct(Ax402_WC_Control_Plane_Client $client, bool $force_refresh = false)
-    {
+    /** @var \DateTimeImmutable|null Clock override for tests (UTC). */
+    private ?\DateTimeImmutable $now;
+
+    public function __construct(
+        Ax402_WC_Control_Plane_Client $client,
+        bool $force_refresh = false,
+        ?\DateTimeImmutable $now = null
+    ) {
         $this->client = $client;
         $this->force_refresh = $force_refresh;
+        $this->now = $now;
     }
 
     /**
@@ -71,6 +80,58 @@ final class Ax402_WC_Control_Plane_Exchange_Rates implements Ax402_WC_Exchange_R
         return $formatted === '' ? null : $formatted;
     }
 
+    /**
+     * Dates to try, newest first: today → yesterday → closest previous business day.
+     *
+     * @return list<string> YYYY-MM-DD in UTC
+     */
+    public static function candidate_rate_dates(\DateTimeImmutable $now): array
+    {
+        $today = $now->setTimezone(new \DateTimeZone('UTC'))->setTime(0, 0, 0);
+        $yesterday = $today->modify('-1 day');
+        $business = self::closest_previous_business_day($today);
+
+        $dates = [];
+        foreach ([$today, $yesterday, $business] as $day) {
+            $formatted = $day->format('Y-m-d');
+            if (!in_array($formatted, $dates, true)) {
+                $dates[] = $formatted;
+            }
+        }
+
+        return $dates;
+    }
+
+    /**
+     * Nearest Mon–Fri strictly before `$day` (UTC calendar date).
+     *
+     * Sat/Sun/Mon → preceding Friday; Tue–Fri → yesterday.
+     */
+    public static function closest_previous_business_day(\DateTimeImmutable $day): \DateTimeImmutable
+    {
+        $day = $day->setTimezone(new \DateTimeZone('UTC'))->setTime(0, 0, 0);
+        // 1=Mon … 7=Sun (ISO).
+        $iso = (int) $day->format('N');
+        $subtract = match ($iso) {
+            1 => 3, // Monday → Friday
+            7 => 2, // Sunday → Friday
+            6 => 1, // Saturday → Friday
+            default => 1, // Tue–Fri → yesterday
+        };
+
+        return $day->modify('-' . $subtract . ' day');
+    }
+
+    /**
+     * True when the payload has at least one usable rate row.
+     *
+     * @param array<string, mixed> $payload
+     */
+    public static function payload_has_rates(array $payload): bool
+    {
+        return self::index_rates($payload) !== [];
+    }
+
     private function ensure_loaded(): void
     {
         if ($this->loaded) {
@@ -90,18 +151,33 @@ final class Ax402_WC_Control_Plane_Exchange_Rates implements Ax402_WC_Exchange_R
             self::clear_cache_for_base_url($this->client->base_url());
         }
 
-        try {
-            $payload = $this->client->get_exchange_rates('usd');
-        } catch (Throwable $e) {
-            $this->tokens_per_usd = null;
-            return;
-        }
-
-        $map = self::index_rates($payload);
+        $map = $this->fetch_with_date_fallback();
         $this->tokens_per_usd = $map;
-        if ($map !== []) {
+        if ($map !== null && $map !== []) {
             $this->write_cache($map);
         }
+    }
+
+    /**
+     * @return array<string, string>|null
+     */
+    private function fetch_with_date_fallback(): ?array
+    {
+        $now = $this->now ?? new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
+        foreach (self::candidate_rate_dates($now) as $date) {
+            try {
+                $payload = $this->client->get_exchange_rates('usd', $date);
+            } catch (Throwable $e) {
+                continue;
+            }
+            if (!self::payload_has_rates($payload)) {
+                continue;
+            }
+
+            return self::index_rates($payload);
+        }
+
+        return null;
     }
 
     /**

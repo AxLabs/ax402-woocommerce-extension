@@ -82,16 +82,23 @@ final class Ax402_WC_Control_Plane_Client
      * Response shape: { quote, rate_date, rates: [{ token_id, symbol, network, rate, ... }] }
      * Each `rate` is the quote-currency price of one token unit (e.g. USD per XGAS).
      *
+     * @param string $quote Quote currency (default usd).
+     * @param string|null $date Optional YYYY-MM-DD. When null, the API picks "today".
      * @return array{quote?:string,rate_date?:string,rates?:list<array<string,mixed>>}
      */
-    public function get_exchange_rates(string $quote = 'usd'): array
+    public function get_exchange_rates(string $quote = 'usd', ?string $date = null): array
     {
         $quote = strtolower(trim($quote));
         if ($quote === '') {
             $quote = 'usd';
         }
 
-        $result = $this->request('GET', '/exchange-rates?quote=' . rawurlencode($quote));
+        $query = 'quote=' . rawurlencode($quote);
+        if ($date !== null && $date !== '') {
+            $query .= '&date=' . rawurlencode($date);
+        }
+
+        $result = $this->request('GET', '/exchange-rates?' . $query);
         if (isset($result['error'])) {
             throw new RuntimeException('Exchange rates failed: ' . $result['error']);
         }

@@ -97,7 +97,7 @@ Disable reconcile when you intentionally want to test **raw upstream fulfill** a
 
 ## Amount / FX notes
 
-- Catalog total is USD; non-stable tokens use control-plane `GET /exchange-rates?quote=usd`.
+- Catalog total is USD; non-stable tokens use control-plane `GET /exchange-rates?quote=usd&date=YYYY-MM-DD` (today → yesterday → closest previous business day on empty/error).
 - When truncating to the gateway’s max fraction digits, amounts **ceil** (round up) so the charged atomic is never below the converted value.
 - Primary meta `_ax402_amount_atomic` follows the selected / primary token (not always 6-decimal USDC).
 
