@@ -25,10 +25,10 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
         $this->init_form_fields();
         $this->init_settings();
 
-        $this->title = $this->get_option('title', __('Pay with Ax402', 'ax402-for-woocommerce'));
-        $this->description = $this->get_option(
-            'description',
-            __('Pay with a supported wallet token via Ax402 / x402.', 'ax402-for-woocommerce')
+        $this->title = __('Pay with Ax402', 'ax402-for-woocommerce');
+        $this->description = __(
+            'Pay with a wallet using stablecoins or supported tokens via Ax402 using the x402 standard. For people and AI agents. No network fees for shoppers.',
+            'ax402-for-woocommerce'
         );
         $this->enabled = $this->get_option('enabled', 'no');
 
@@ -49,18 +49,6 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
                 'type' => 'checkbox',
                 'label' => __('Enable Ax402 payments', 'ax402-for-woocommerce'),
                 'default' => 'no',
-            ],
-            'title' => [
-                'title' => __('Title', 'ax402-for-woocommerce'),
-                'type' => 'text',
-                'description' => __('Payment method title at checkout.', 'ax402-for-woocommerce'),
-                'default' => __('Pay with Ax402', 'ax402-for-woocommerce'),
-                'desc_tip' => true,
-            ],
-            'description' => [
-                'title' => __('Description', 'ax402-for-woocommerce'),
-                'type' => 'textarea',
-                'default' => __('Pay with a supported wallet token via Ax402 / x402.', 'ax402-for-woocommerce'),
             ],
             'base_url' => [
                 'title' => __('Ax402 API base URL', 'ax402-for-woocommerce'),
