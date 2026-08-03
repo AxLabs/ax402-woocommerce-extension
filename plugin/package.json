@@ -10,8 +10,8 @@
     "test:js": "vitest run --config ../vitest.config.mjs"
   },
   "dependencies": {
-    "@ax402/react-paywall": "^0.0.3",
-    "@ax402/sdk": "^0.0.3",
+    "@ax402/react-paywall": "^0.0.4",
+    "@ax402/sdk": "^0.0.4",
     "@wordpress/element": "^6.0.0",
     "@wordpress/html-entities": "^4.0.0",
     "@x402/evm": "^2.0.0",

@@ -35,6 +35,7 @@ rsync -a \
   --exclude 'vendor/' \
   --exclude 'src/' \
   --exclude 'webpack.config.js' \
+  --exclude '.eslintrc.js' \
   --exclude '*.map' \
   --exclude 'package-lock.json' \
   --exclude 'composer.lock' \
