@@ -2,107 +2,106 @@
  * Lightweight EIP-1193 helpers for network switch + balances.
  */
 
-import {
-	encodeBalanceOf,
-	hexQuantityToDecimal,
-} from './readiness';
+import { encodeBalanceOf, hexQuantityToDecimal } from './readiness';
 
 /**
- * @return {object|null}
+ * @return {Object|null} Injected EIP-1193 provider, if any.
  */
 export function getEthereumProvider() {
-	if (typeof window === 'undefined') {
+	if ( typeof window === 'undefined' ) {
 		return null;
 	}
 	return window.ethereum || null;
 }
 
 /**
- * @param {object} provider
- * @return {Promise<string|null>}
+ * @param {Object} provider
+ * @return {Promise<string|null>} Wallet chain id hex, or null.
  */
-export async function getWalletChainId(provider) {
-	if (!provider?.request) {
+export async function getWalletChainId( provider ) {
+	if ( ! provider?.request ) {
 		return null;
 	}
-	const chainId = await provider.request({ method: 'eth_chainId' });
+	const chainId = await provider.request( { method: 'eth_chainId' } );
 	return typeof chainId === 'string' ? chainId : null;
 }
 
 /**
- * @param {object} provider
+ * @param {Object}                                                                                    provider
  * @param {{ chainIdHex: string, networkLabel?: string, rpcUrl?: string, blockExplorerUrl?: string }} chain
  */
-export async function switchOrAddChain(provider, chain) {
-	if (!provider?.request) {
-		throw new Error('No wallet provider');
+export async function switchOrAddChain( provider, chain ) {
+	if ( ! provider?.request ) {
+		throw new Error( 'No wallet provider' );
 	}
 	const chainId = chain.chainIdHex;
 	try {
-		await provider.request({
+		await provider.request( {
 			method: 'wallet_switchEthereumChain',
-			params: [{ chainId }],
-		});
+			params: [ { chainId } ],
+		} );
 		return;
-	} catch (error) {
+	} catch ( error ) {
 		const code = error && typeof error === 'object' ? error.code : null;
-		if (code !== 4902 && code !== -32603) {
+		if ( code !== 4902 && code !== -32603 ) {
 			throw error;
 		}
 	}
 
 	const rpcUrl = chain.rpcUrl || '';
-	if (!rpcUrl) {
+	if ( ! rpcUrl ) {
 		throw new Error(
-			`Chain ${chain.networkLabel || chainId} is not in your wallet. Add it, then retry.`
+			`Chain ${
+				chain.networkLabel || chainId
+			} is not in your wallet. Add it, then retry.`
 		);
 	}
 
-	await provider.request({
+	await provider.request( {
 		method: 'wallet_addEthereumChain',
 		params: [
 			{
 				chainId,
-				chainName: chain.networkLabel || `Chain ${chainId}`,
+				chainName: chain.networkLabel || `Chain ${ chainId }`,
 				nativeCurrency: {
 					name: 'Ether',
 					symbol: 'ETH',
 					decimals: 18,
 				},
-				rpcUrls: [rpcUrl],
+				rpcUrls: [ rpcUrl ],
 				blockExplorerUrls: chain.blockExplorerUrl
-					? [chain.blockExplorerUrl]
+					? [ chain.blockExplorerUrl ]
 					: undefined,
 			},
 		],
-	});
+	} );
 }
 
 /**
- * @param {object} provider
+ * @param {Object}                                                                provider
  * @param {{ asset: string, isNative?: boolean, rpcUrl?: string, owner: string }} opts
- * @return {Promise<string>} decimal atomic balance
+ * @return {Promise<string>} Decimal atomic balance.
  */
-export async function fetchTokenBalance(provider, opts) {
+export async function fetchTokenBalance( provider, opts ) {
 	const owner = opts.owner;
-	if (!provider?.request || !owner) {
+	if ( ! provider?.request || ! owner ) {
 		return '0';
 	}
 
-	if (opts.isNative) {
-		const hex = await provider.request({
+	if ( opts.isNative ) {
+		const hex = await provider.request( {
 			method: 'eth_getBalance',
-			params: [owner, 'latest'],
-		});
-		return hexQuantityToDecimal(hex);
+			params: [ owner, 'latest' ],
+		} );
+		return hexQuantityToDecimal( hex );
 	}
 
-	const data = encodeBalanceOf(owner);
-	const hex = await provider.request({
+	const data = encodeBalanceOf( owner );
+	const hex = await provider.request( {
 		method: 'eth_call',
-		params: [{ to: opts.asset, data }, 'latest'],
-	});
-	return hexQuantityToDecimal(hex);
+		params: [ { to: opts.asset, data }, 'latest' ],
+	} );
+	return hexQuantityToDecimal( hex );
 }
 
 /**
@@ -110,16 +109,16 @@ export async function fetchTokenBalance(provider, opts) {
  *
  * @param {string} atomic
  * @param {number} decimals
- * @return {string}
+ * @return {string} Human-readable token amount.
  */
-export function formatAtomicAmount(atomic, decimals) {
-	const d = Number.isFinite(decimals) ? decimals : 6;
-	const raw = String(atomic || '0');
-	if (!/^\d+$/.test(raw)) {
+export function formatAtomicAmount( atomic, decimals ) {
+	const d = Number.isFinite( decimals ) ? decimals : 6;
+	const raw = String( atomic || '0' );
+	if ( ! /^\d+$/.test( raw ) ) {
 		return '0';
 	}
-	const padded = raw.padStart(d + 1, '0');
-	const whole = padded.slice(0, -d).replace(/^0+(?=\d)/, '') || '0';
-	const frac = padded.slice(-d).replace(/0+$/, '');
-	return frac ? `${whole}.${frac}` : whole;
+	const padded = raw.padStart( d + 1, '0' );
+	const whole = padded.slice( 0, -d ).replace( /^0+(?=\d)/, '' ) || '0';
+	const frac = padded.slice( -d ).replace( /0+$/, '' );
+	return frac ? `${ whole }.${ frac }` : whole;
 }

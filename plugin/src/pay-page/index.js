@@ -27,11 +27,11 @@ function readConfig() {
 	return window.ax402PayPage || {};
 }
 
-function shortAddress(address) {
-	if (!address) {
+function shortAddress( address ) {
+	if ( ! address ) {
 		return '';
 	}
-	return `${address.slice(0, 6)}…${address.slice(-4)}`;
+	return `${ address.slice( 0, 6 ) }…${ address.slice( -4 ) }`;
 }
 
 function NetworkGlyph() {
@@ -92,8 +92,8 @@ function RateGlyph() {
 	);
 }
 
-function SettlementPicker({ options, selectedId, onSelect }) {
-	if (!options.length) {
+function SettlementPicker( { options, selectedId, onSelect } ) {
+	if ( ! options.length ) {
 		return null;
 	}
 
@@ -102,18 +102,18 @@ function SettlementPicker({ options, selectedId, onSelect }) {
 	return (
 		<div className="ax402-settle">
 			<p className="ax402-settle-label">
-				{selectable ? 'Choose settlement token' : 'Settlement token'}
+				{ selectable ? 'Choose settlement token' : 'Settlement token' }
 			</p>
 			<ul className="ax402-settle-list">
-				{options.map((option) => {
+				{ options.map( ( option ) => {
 					const active = option.tokenId === selectedId;
-					const amountLabel = formatTokenAmount(option.amount, 8);
+					const amountLabel = formatTokenAmount( option.amount, 8 );
 					const rateLabel = formatUsdExchangeRate(
 						option.rate,
 						option.symbol
 					);
 					return (
-						<li key={option.tokenId}>
+						<li key={ option.tokenId }>
 							<button
 								type="button"
 								className={
@@ -121,98 +121,100 @@ function SettlementPicker({ options, selectedId, onSelect }) {
 										? 'ax402-settle-option is-active'
 										: 'ax402-settle-option'
 								}
-								disabled={!selectable}
-								aria-pressed={active}
-								onClick={() => {
-									if (selectable) {
-										onSelect(option.tokenId);
+								disabled={ ! selectable }
+								aria-pressed={ active }
+								onClick={ () => {
+									if ( selectable ) {
+										onSelect( option.tokenId );
 									}
-								}}
+								} }
 							>
 								<span className="ax402-settle-top">
 									<span className="ax402-settle-symbol">
-										{option.symbol}
+										{ option.symbol }
 									</span>
 									<span className="ax402-settle-network">
 										<NetworkGlyph />
-										{option.networkLabel ||
+										{ option.networkLabel ||
 											option.network ||
-											''}
+											'' }
 									</span>
 								</span>
 								<span className="ax402-settle-amount">
-									{amountLabel} {option.symbol}
+									{ amountLabel } { option.symbol }
 								</span>
-								{rateLabel ? (
+								{ rateLabel ? (
 									<span className="ax402-settle-rate">
 										<RateGlyph />
-										{rateLabel}
+										{ rateLabel }
 									</span>
-								) : null}
+								) : null }
 							</button>
 						</li>
 					);
-				})}
+				} ) }
 			</ul>
 		</div>
 	);
 }
 
-function StepCard({ title, description, children, footer }) {
+function StepCard( { title, description, children, footer } ) {
 	return (
-		<div className="ax402-step" role="region" aria-label={title}>
-			<h2 className="ax402-step-title">{title}</h2>
-			{description ? (
-				<p className="ax402-step-desc">{description}</p>
-			) : null}
-			{children}
-			{footer ? <div className="ax402-step-footer">{footer}</div> : null}
+		<div className="ax402-step" role="region" aria-label={ title }>
+			<h2 className="ax402-step-title">{ title }</h2>
+			{ description ? (
+				<p className="ax402-step-desc">{ description }</p>
+			) : null }
+			{ children }
+			{ footer ? (
+				<div className="ax402-step-footer">{ footer }</div>
+			) : null }
 		</div>
 	);
 }
 
 function ConnectStep() {
 	const { connectWallet, refreshWallets, connectedWalletName } = usePaywall();
-	const [busy, setBusy] = useState(false);
-	const [error, setError] = useState('');
-	const [pickerWallets, setPickerWallets] = useState([]);
+	const [ busy, setBusy ] = useState( false );
+	const [ error, setError ] = useState( '' );
+	const [ pickerWallets, setPickerWallets ] = useState( [] );
 
 	async function onConnect() {
-		setBusy(true);
-		setError('');
-		setPickerWallets([]);
+		setBusy( true );
+		setError( '' );
+		setPickerWallets( [] );
 		try {
 			await connectWallet();
-		} catch (e) {
-			if (e instanceof WalletSelectionRequiredError) {
-				setPickerWallets(e.wallets || []);
+		} catch ( e ) {
+			if ( e instanceof WalletSelectionRequiredError ) {
+				setPickerWallets( e.wallets || [] );
 			} else {
 				try {
 					const list = await refreshWallets();
-					if (list?.length > 1) {
-						setPickerWallets(list);
+					if ( list?.length > 1 ) {
+						setPickerWallets( list );
 					} else {
-						setError(e?.message || 'Could not connect wallet');
+						setError( e?.message || 'Could not connect wallet' );
 					}
 				} catch {
-					setError(e?.message || 'Could not connect wallet');
+					setError( e?.message || 'Could not connect wallet' );
 				}
 			}
 		} finally {
-			setBusy(false);
+			setBusy( false );
 		}
 	}
 
-	async function onPick(walletId) {
-		setBusy(true);
-		setError('');
+	async function onPick( walletId ) {
+		setBusy( true );
+		setError( '' );
 		try {
-			await connectWallet(walletId);
-			setPickerWallets([]);
-		} catch (e) {
-			setError(e?.message || 'Could not connect wallet');
+			await connectWallet( walletId );
+			setPickerWallets( [] );
+		} catch ( e ) {
+			setError( e?.message || 'Could not connect wallet' );
 		} finally {
-			setBusy(false);
+			setBusy( false );
 		}
 	}
 
@@ -221,122 +223,122 @@ function ConnectStep() {
 			title="Connect your wallet"
 			description="Connect and just sign the payment to continue."
 		>
-			{pickerWallets.length > 0 ? (
+			{ pickerWallets.length > 0 ? (
 				<WalletPicker
-					wallets={pickerWallets}
-					disabled={busy}
-					onSelect={onPick}
-					onCancel={() => setPickerWallets([])}
+					wallets={ pickerWallets }
+					disabled={ busy }
+					onSelect={ onPick }
+					onCancel={ () => setPickerWallets( [] ) }
 				/>
 			) : (
 				<button
 					type="button"
 					className="ax402-primary-btn"
-					disabled={busy}
-					onClick={onConnect}
+					disabled={ busy }
+					onClick={ onConnect }
 				>
-					{busy ? 'Connecting…' : 'Connect wallet'}
+					{ busy ? 'Connecting…' : 'Connect wallet' }
 				</button>
-			)}
-			{error ? (
+			) }
+			{ error ? (
 				<p className="ax402-step-error" role="alert">
-					{error}
+					{ error }
 				</p>
-			) : null}
-			{connectedWalletName ? (
-				<p className="ax402-step-meta">{connectedWalletName}</p>
-			) : null}
+			) : null }
+			{ connectedWalletName ? (
+				<p className="ax402-step-meta">{ connectedWalletName }</p>
+			) : null }
 		</StepCard>
 	);
 }
 
-function SwitchNetworkStep({ option }) {
-	const [busy, setBusy] = useState(false);
-	const [error, setError] = useState('');
+function SwitchNetworkStep( { option } ) {
+	const [ busy, setBusy ] = useState( false );
+	const [ error, setError ] = useState( '' );
 	const { walletAddress, connectedWalletName } = usePaywall();
 
 	async function onSwitchNetwork() {
 		const provider = getEthereumProvider();
-		if (!provider || !option) {
+		if ( ! provider || ! option ) {
 			return;
 		}
-		setBusy(true);
-		setError('');
+		setBusy( true );
+		setError( '' );
 		try {
-			await switchOrAddChain(provider, {
+			await switchOrAddChain( provider, {
 				chainIdHex: option.chainIdHex,
 				networkLabel: option.networkLabel,
 				rpcUrl: option.rpcUrl,
 				blockExplorerUrl: option.blockExplorerUrl,
-			});
-		} catch (e) {
-			setError(e?.message || 'Network switch failed');
+			} );
+		} catch ( e ) {
+			setError( e?.message || 'Network switch failed' );
 		} finally {
-			setBusy(false);
+			setBusy( false );
 		}
 	}
 
 	return (
 		<StepCard
-			title={`Switch to ${option.networkLabel}`}
-			description={`Your wallet is on the wrong network for ${option.symbol}. Switch, then you’ll confirm the payment.`}
+			title={ `Switch to ${ option.networkLabel }` }
+			description={ `Your wallet is on the wrong network for ${ option.symbol }. Switch, then you’ll confirm the payment.` }
 			footer={
 				<span>
-					{connectedWalletName ? `${connectedWalletName} · ` : ''}
-					{shortAddress(walletAddress)}
+					{ connectedWalletName ? `${ connectedWalletName } · ` : '' }
+					{ shortAddress( walletAddress ) }
 				</span>
 			}
 		>
 			<button
 				type="button"
 				className="ax402-primary-btn"
-				disabled={busy}
-				onClick={onSwitchNetwork}
+				disabled={ busy }
+				onClick={ onSwitchNetwork }
 			>
-				{busy ? 'Switching…' : `Switch to ${option.networkLabel}`}
+				{ busy ? 'Switching…' : `Switch to ${ option.networkLabel }` }
 			</button>
-			{error ? (
+			{ error ? (
 				<p className="ax402-step-error" role="alert">
-					{error}
+					{ error }
 				</p>
-			) : null}
+			) : null }
 		</StepCard>
 	);
 }
 
-function InsufficientBalanceStep({ option, balanceAtomic }) {
+function InsufficientBalanceStep( { option, balanceAtomic } ) {
 	const { walletAddress, connectedWalletName } = usePaywall();
-	const need = formatAtomicAmount(option.amountAtomic, option.decimals);
+	const need = formatAtomicAmount( option.amountAtomic, option.decimals );
 	const have =
-		balanceAtomic != null
-			? formatAtomicAmount(balanceAtomic, option.decimals)
+		balanceAtomic !== null && balanceAtomic !== undefined
+			? formatAtomicAmount( balanceAtomic, option.decimals )
 			: '—';
 
 	return (
 		<StepCard
 			title="Insufficient balance"
-			description={`This order needs ${need} ${option.symbol} on ${option.networkLabel}. Your wallet has ${have} ${option.symbol}.`}
+			description={ `This order needs ${ need } ${ option.symbol } on ${ option.networkLabel }. Your wallet has ${ have } ${ option.symbol }.` }
 			footer={
 				<span>
-					{connectedWalletName ? `${connectedWalletName} · ` : ''}
-					{shortAddress(walletAddress)}
+					{ connectedWalletName ? `${ connectedWalletName } · ` : '' }
+					{ shortAddress( walletAddress ) }
 				</span>
 			}
 		>
 			<p className="ax402-step-hint">
-				Add funds on {option.networkLabel}, then this page will unlock
+				Add funds on { option.networkLabel }, then this page will unlock
 				payment automatically.
 			</p>
 		</StepCard>
 	);
 }
 
-function PayStep({ config, option }) {
-	const priceLabel = formatPayLabel(option?.amount, option?.symbol);
-	const [phase, setPhase] = useState('pay');
-	const [error, setError] = useState('');
+function PayStep( { config, option } ) {
+	const priceLabel = formatPayLabel( option?.amount, option?.symbol );
+	const [ phase, setPhase ] = useState( 'pay' );
+	const [ error, setError ] = useState( '' );
 
-	if (phase === 'confirming') {
+	if ( phase === 'confirming' ) {
 		return (
 			<StepCard
 				title="Confirming payment…"
@@ -348,26 +350,23 @@ function PayStep({ config, option }) {
 		);
 	}
 
-	if (phase === 'error') {
+	if ( phase === 'error' ) {
 		return (
-			<StepCard
-				title="Payment not confirmed yet"
-				description={error}
-			>
+			<StepCard title="Payment not confirmed yet" description={ error }>
 				<button
 					type="button"
 					className="ax402-primary-btn"
-					onClick={() => {
+					onClick={ () => {
 						window.location.reload();
-					}}
+					} }
 				>
 					Check again
 				</button>
-				{config.thankYouUrl ? (
+				{ config.thankYouUrl ? (
 					<p className="ax402-step-meta">
-						<a href={config.thankYouUrl}>View order status</a>
+						<a href={ config.thankYouUrl }>View order status</a>
 					</p>
-				) : null}
+				) : null }
 			</StepCard>
 		);
 	}
@@ -375,34 +374,34 @@ function PayStep({ config, option }) {
 	return (
 		<div className="ax402-pay-step">
 			<PaywallGate
-				resourceUrl={config.gatewayUrl}
-				title={`Pay ${priceLabel}`}
-				description={`Confirm in your wallet to complete order #${
+				resourceUrl={ config.gatewayUrl }
+				title={ `Pay ${ priceLabel }` }
+				description={ `Confirm in your wallet to complete order #${
 					config.orderId || ''
-				} on ${option.networkLabel}.`}
-				priceLabel={priceLabel}
-				agentDiscovery={false}
+				} on ${ option.networkLabel }.` }
+				priceLabel={ priceLabel }
+				agentDiscovery={ false }
 				inspectOnMount
 				className="ax402-inline-gate"
-				onUnlocked={async () => {
-					setPhase('confirming');
-					setError('');
+				onUnlocked={ async () => {
+					setPhase( 'confirming' );
+					setError( '' );
 					try {
-						await pollUntilPaid(config.statusUrl, {
+						await pollUntilPaid( config.statusUrl, {
 							intervalMs: 800,
 							timeoutMs: 90000,
-						});
+						} );
 						window.location.href = config.thankYouUrl;
-					} catch (e) {
+					} catch ( e ) {
 						setError(
 							'The store has not marked this order as paid yet. If you already confirmed in your wallet, wait a moment and tap Check again. If this keeps happening, contact the store with your order number.'
 						);
-						setPhase('error');
+						setPhase( 'error' );
 					}
-				}}
-				renderUnlocked={() => (
+				} }
+				renderUnlocked={ () => (
 					<p>Payment received. Confirming with the store…</p>
-				)}
+				) }
 			>
 				<p>Payment received. Confirming with the store…</p>
 			</PaywallGate>
@@ -410,23 +409,23 @@ function PayStep({ config, option }) {
 	);
 }
 
-function PaymentSteps({ config, option, endpointReady, lockError }) {
+function PaymentSteps( { config, option, endpointReady, lockError } ) {
 	const { walletAddress } = usePaywall();
-	const [chainId, setChainId] = useState(null);
-	const [balanceAtomic, setBalanceAtomic] = useState(null);
-	const [readError, setReadError] = useState('');
+	const [ chainId, setChainId ] = useState( null );
+	const [ balanceAtomic, setBalanceAtomic ] = useState( null );
+	const [ readError, setReadError ] = useState( '' );
 
-	const networkOk = networkMatches(chainId, option?.chainIdHex);
+	const networkOk = networkMatches( chainId, option?.chainIdHex );
 	const balanceOk = hasSufficientBalance(
 		balanceAtomic,
 		option?.amountAtomic
 	);
 
-	useEffect(() => {
+	useEffect( () => {
 		const provider = getEthereumProvider();
-		if (!provider || !walletAddress || !option) {
-			setChainId(null);
-			setBalanceAtomic(null);
+		if ( ! provider || ! walletAddress || ! option ) {
+			setChainId( null );
+			setBalanceAtomic( null );
 			return undefined;
 		}
 
@@ -434,84 +433,87 @@ function PaymentSteps({ config, option, endpointReady, lockError }) {
 
 		async function refresh() {
 			try {
-				const nextChain = await getWalletChainId(provider);
-				if (cancelled) {
+				const nextChain = await getWalletChainId( provider );
+				if ( cancelled ) {
 					return;
 				}
-				setChainId(nextChain);
+				setChainId( nextChain );
 				if (
-					!networkMatches(nextChain, option.chainIdHex) ||
-					!option.asset
+					! networkMatches( nextChain, option.chainIdHex ) ||
+					! option.asset
 				) {
-					setBalanceAtomic(null);
+					setBalanceAtomic( null );
 					return;
 				}
-				const bal = await fetchTokenBalance(provider, {
+				const bal = await fetchTokenBalance( provider, {
 					asset: option.asset,
-					isNative: Boolean(option.isNative),
+					isNative: Boolean( option.isNative ),
 					owner: walletAddress,
-				});
-				if (!cancelled) {
-					setBalanceAtomic(bal);
-					setReadError('');
+				} );
+				if ( ! cancelled ) {
+					setBalanceAtomic( bal );
+					setReadError( '' );
 				}
-			} catch (e) {
-				if (!cancelled) {
-					setReadError(e?.message || 'Could not read wallet state');
+			} catch ( e ) {
+				if ( ! cancelled ) {
+					setReadError( e?.message || 'Could not read wallet state' );
 				}
 			}
 		}
 
 		refresh();
-		const onChain = (id) => {
-			setChainId(typeof id === 'string' ? id : null);
+		const onChain = ( id ) => {
+			setChainId( typeof id === 'string' ? id : null );
 		};
-		provider.on?.('chainChanged', onChain);
-		provider.on?.('accountsChanged', refresh);
-		const timer = setInterval(refresh, 8000);
+		provider.on?.( 'chainChanged', onChain );
+		provider.on?.( 'accountsChanged', refresh );
+		const timer = setInterval( refresh, 8000 );
 
 		return () => {
 			cancelled = true;
-			clearInterval(timer);
-			provider.removeListener?.('chainChanged', onChain);
-			provider.removeListener?.('accountsChanged', refresh);
+			clearInterval( timer );
+			provider.removeListener?.( 'chainChanged', onChain );
+			provider.removeListener?.( 'accountsChanged', refresh );
 		};
-	}, [walletAddress, option]);
+	}, [ walletAddress, option ] );
 
 	let step = null;
-	if (!walletAddress) {
+	if ( ! walletAddress ) {
 		step = <ConnectStep />;
-	} else if (!option) {
+	} else if ( ! option ) {
 		step = (
 			<StepCard
 				title="No settlement token"
 				description="This store has no payable settlement token configured."
 			/>
 		);
-	} else if (!networkOk) {
-		step = <SwitchNetworkStep option={option} />;
-	} else if (!balanceOk) {
+	} else if ( ! networkOk ) {
+		step = <SwitchNetworkStep option={ option } />;
+	} else if ( ! balanceOk ) {
 		step = (
 			<InsufficientBalanceStep
-				option={option}
-				balanceAtomic={balanceAtomic}
+				option={ option }
+				balanceAtomic={ balanceAtomic }
 			/>
 		);
-	} else if (lockError) {
+	} else if ( lockError ) {
 		step = (
-			<StepCard title="Could not prepare payment" description={lockError}>
+			<StepCard
+				title="Could not prepare payment"
+				description={ lockError }
+			>
 				<button
 					type="button"
 					className="ax402-primary-btn"
-					onClick={() => {
+					onClick={ () => {
 						window.location.reload();
-					}}
+					} }
 				>
 					Try again
 				</button>
 			</StepCard>
 		);
-	} else if (!endpointReady) {
+	} else if ( ! endpointReady ) {
 		step = (
 			<StepCard
 				title="Preparing payment…"
@@ -521,17 +523,17 @@ function PaymentSteps({ config, option, endpointReady, lockError }) {
 			</StepCard>
 		);
 	} else {
-		step = <PayStep config={config} option={option} />;
+		step = <PayStep config={ config } option={ option } />;
 	}
 
 	return (
 		<div className="ax402-steps">
-			{readError ? (
+			{ readError ? (
 				<p className="ax402-step-error" role="alert">
-					{readError}
+					{ readError }
 				</p>
-			) : null}
-			{step}
+			) : null }
+			{ step }
 		</div>
 	);
 }
@@ -541,86 +543,88 @@ function PayApp() {
 	const gatewayUrl = config.gatewayUrl;
 	const options = useMemo(
 		() =>
-			Array.isArray(config.settlementOptions)
+			Array.isArray( config.settlementOptions )
 				? config.settlementOptions
 				: [],
-		[config.settlementOptions]
+		[ config.settlementOptions ]
 	);
-	const [selectedId, setSelectedId] = useState(
-		() => options[0]?.tokenId || ''
+	const [ selectedId, setSelectedId ] = useState(
+		() => options[ 0 ]?.tokenId || ''
 	);
-	const [endpointReady, setEndpointReady] = useState(false);
-	const [lockError, setLockError] = useState('');
+	const [ endpointReady, setEndpointReady ] = useState( false );
+	const [ lockError, setLockError ] = useState( '' );
 
-	useEffect(() => {
+	useEffect( () => {
 		if (
 			options.length &&
-			!options.some((o) => o.tokenId === selectedId)
+			! options.some( ( o ) => o.tokenId === selectedId )
 		) {
-			setSelectedId(options[0].tokenId);
+			setSelectedId( options[ 0 ].tokenId );
 		}
-	}, [options, selectedId]);
+	}, [ options, selectedId ] );
 
 	const selected =
-		options.find((o) => o.tokenId === selectedId) || options[0] || null;
+		options.find( ( o ) => o.tokenId === selectedId ) ||
+		options[ 0 ] ||
+		null;
 
-	useEffect(() => {
-		if (!selected?.tokenId) {
-			setEndpointReady(false);
-			setLockError('');
+	useEffect( () => {
+		if ( ! selected?.tokenId ) {
+			setEndpointReady( false );
+			setLockError( '' );
 			return undefined;
 		}
 
 		const url = config.selectSettlementUrl;
-		if (!url) {
-			setEndpointReady(true);
-			setLockError('');
+		if ( ! url ) {
+			setEndpointReady( true );
+			setLockError( '' );
 			return undefined;
 		}
 
 		let cancelled = false;
-		setEndpointReady(false);
-		setLockError('');
+		setEndpointReady( false );
+		setLockError( '' );
 
-		(async () => {
+		( async () => {
 			try {
-				const res = await fetch(url, {
+				const res = await fetch( url, {
 					method: 'POST',
 					credentials: 'same-origin',
 					headers: {
 						Accept: 'application/json',
 						'Content-Type': 'application/json',
 					},
-					body: JSON.stringify({ tokenId: selected.tokenId }),
-				});
-				const data = await res.json().catch(() => ({}));
-				if (!res.ok) {
+					body: JSON.stringify( { tokenId: selected.tokenId } ),
+				} );
+				const data = await res.json().catch( () => ( {} ) );
+				if ( ! res.ok ) {
 					const msg =
 						data?.message ||
 						data?.code ||
-						`Could not lock settlement (${res.status})`;
-					throw new Error(msg);
+						`Could not lock settlement (${ res.status })`;
+					throw new Error( msg );
 				}
-				if (!cancelled) {
-					setEndpointReady(true);
+				if ( ! cancelled ) {
+					setEndpointReady( true );
 				}
-			} catch (e) {
-				if (!cancelled) {
-					setEndpointReady(false);
+			} catch ( e ) {
+				if ( ! cancelled ) {
+					setEndpointReady( false );
 					setLockError(
 						e?.message ||
 							'Could not set the settlement amount on Ax402'
 					);
 				}
 			}
-		})();
+		} )();
 
 		return () => {
 			cancelled = true;
 		};
-	}, [selected?.tokenId, config.selectSettlementUrl]);
+	}, [ selected?.tokenId, config.selectSettlementUrl ] );
 
-	if (!gatewayUrl) {
+	if ( ! gatewayUrl ) {
 		return (
 			<div>
 				<p>
@@ -629,7 +633,7 @@ function PayApp() {
 				<p>
 					Please refresh this page. If the problem continues, contact
 					the store with your order number
-					{config.orderId ? ` (#${config.orderId})` : ''}.
+					{ config.orderId ? ` (#${ config.orderId })` : '' }.
 				</p>
 			</div>
 		);
@@ -646,41 +650,41 @@ function PayApp() {
 				<div>
 					<span>Order total (USD)</span>
 					<strong>
-						${config.amountUsd || config.amountUsdc || ''}
+						${ config.amountUsd || config.amountUsdc || '' }
 					</strong>
 				</div>
-				{selected ? (
+				{ selected ? (
 					<div>
 						<span>You will pay</span>
 						<strong>
-							{formatPayLabel(
-								formatTokenAmount(selected.amount, 8),
+							{ formatPayLabel(
+								formatTokenAmount( selected.amount, 8 ),
 								selected.symbol
-							)}
+							) }
 						</strong>
 					</div>
-				) : null}
+				) : null }
 			</div>
 			<SettlementPicker
-				options={options}
-				selectedId={selected?.tokenId || ''}
-				onSelect={setSelectedId}
+				options={ options }
+				selectedId={ selected?.tokenId || '' }
+				onSelect={ setSelectedId }
 			/>
 			<PaywallProvider
-				key={`${selected?.tokenId || 'default'}-${
+				key={ `${ selected?.tokenId || 'default' }-${
 					endpointReady ? 'ready' : 'locking'
-				}`}
-				policy={{
+				}` }
+				policy={ {
 					preferredNetworks: policyNetwork,
 					allowedAssets: policyAsset,
 					preferredAssets: policyAsset,
 					strategy: 'preference-first',
-				}}
-				rpc={{
+				} }
+				rpc={ {
 					defaultUrl: rpcDefault,
 					byNetwork: config.rpcByNetwork || undefined,
-				}}
-				appearance={{
+				} }
+				appearance={ {
 					labels: {
 						connectWallet: 'Connect wallet',
 						payToRead: 'Pay with wallet',
@@ -688,20 +692,20 @@ function PayApp() {
 						walletPickerTitle: 'Choose a wallet',
 						walletPickerCancel: 'Cancel',
 					},
-				}}
+				} }
 			>
 				<PaymentSteps
-					config={config}
-					option={selected}
-					endpointReady={endpointReady}
-					lockError={lockError}
+					config={ config }
+					option={ selected }
+					endpointReady={ endpointReady }
+					lockError={ lockError }
 				/>
 			</PaywallProvider>
 		</>
 	);
 }
 
-const rootEl = document.getElementById('ax402-pay-root');
-if (rootEl) {
-	createRoot(rootEl).render(<PayApp />);
+const rootEl = document.getElementById( 'ax402-pay-root' );
+if ( rootEl ) {
+	createRoot( rootEl ).render( <PayApp /> );
 }
