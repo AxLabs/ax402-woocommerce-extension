@@ -29,6 +29,7 @@ fi
 
 if ! docker info >/dev/null 2>&1; then
   echo "Docker is installed but not usable (daemon down or API error)." >&2
+  echo "Start Docker Desktop, or install PHP + Composer so bin/run-phpunit.sh can run locally." >&2
   exit 1
 fi
 

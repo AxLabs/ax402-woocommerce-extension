@@ -21,6 +21,12 @@ jobs:
         with:
           node-version: "20"
           cache: npm
+      # Prefer native PHPUnit over Docker so CI does not depend on Docker Desktop.
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          tools: composer
+          coverage: none
       - name: Install root + plugin JS deps
         run: |
           npm ci || npm install
@@ -41,6 +47,11 @@ jobs:
             sudo chown -R "$(id -u):$(id -g)" "$ws" || true
           fi
       - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          tools: composer
+          coverage: none
       - name: Live control-plane smoke
         env:
           AX402_API_KEY: ${{ secrets.AX402_API_KEY }}
