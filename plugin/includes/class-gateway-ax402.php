@@ -20,7 +20,9 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
         );
         $this->has_fields = false;
         $this->supports = ['products'];
-        $this->icon = AX402_WC_PLUGIN_URL . 'assets/ax402-icon.svg';
+        $icon_path = AX402_WC_PLUGIN_DIR . 'assets/ax402-icon.svg';
+        $icon_ver = is_readable($icon_path) ? (string) filemtime($icon_path) : AX402_WC_VERSION;
+        $this->icon = add_query_arg('v', $icon_ver, AX402_WC_PLUGIN_URL . 'assets/ax402-icon.svg');
 
         $this->init_form_fields();
         $this->init_settings();
@@ -37,6 +39,24 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
             [$this, 'process_admin_options']
         );
         add_action('woocommerce_update_options_payment_gateways_' . $this->id, [$this, 'sync_plugin_settings']);
+    }
+
+    /**
+     * Checkout payment-method icon (classic + Blocks via settings).
+     */
+    public function get_icon(): string
+    {
+        if ($this->icon === '') {
+            return apply_filters('woocommerce_gateway_icon', '', $this->id);
+        }
+
+        $icon = sprintf(
+            '<img src="%1$s" alt="%2$s" width="32" height="32" style="max-height:32px;width:auto;" />',
+            esc_url(WC_HTTPS::force_https_url($this->icon)),
+            esc_attr($this->get_title())
+        );
+
+        return apply_filters('woocommerce_gateway_icon', $icon, $this->id);
     }
 
     public function init_form_fields(): void

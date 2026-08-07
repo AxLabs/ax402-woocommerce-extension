@@ -416,11 +416,19 @@ function PayStep( { config, option } ) {
 				onUnlocked={ async () => {
 					setPhase( 'confirming' );
 					setError( '' );
+					const confirmingStartedAt = Date.now();
+					const minConfirmingMs = 3000;
 					try {
 						await pollUntilPaid( config.statusUrl, {
 							intervalMs: 800,
 							timeoutMs: 90000,
 						} );
+						const elapsed = Date.now() - confirmingStartedAt;
+						if ( elapsed < minConfirmingMs ) {
+							await new Promise( ( resolve ) =>
+								setTimeout( resolve, minConfirmingMs - elapsed )
+							);
+						}
 						window.location.href = config.thankYouUrl;
 					} catch ( e ) {
 						setError(
