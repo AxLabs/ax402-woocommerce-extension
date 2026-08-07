@@ -83,4 +83,9 @@ Yes. In gateway settings, leave “Show Ax402 credit on the pay page” unchecke
 == Changelog ==
 
 = 0.1.0 =
-* Initial release: gateway, fulfill upstream, agent API, pay page, Blocks support
+* Initial release: Ax402 / x402 WooCommerce payment gateway
+* Human pay page with wallet connect (EVM + optional Hedera WalletConnect)
+* Multi-token settlement from Ax402 platform config; catalog stays USD
+* Dual store APIs for EVM and Hedera settlement families
+* Fulfill upstream, agent REST browse/buy, Cart & Checkout Blocks, HPOS
+* Opt-in Ax402 credit on the pay page; uninstall cleanup for plugin options
