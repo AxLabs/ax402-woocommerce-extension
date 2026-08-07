@@ -2,7 +2,7 @@
 Contributors: axlabs
 Tags: woocommerce, payments, crypto, usdc, x402
 Requires at least: 6.0
-Tested up to: 6.8
+Tested up to: 7.0
 Requires PHP: 8.1
 Stable tag: 0.1.0
 License: GPLv3 or later
@@ -29,13 +29,23 @@ This plugin talks to Ax402 (operated by AxLabs GmbH) to create payment endpoints
 * Privacy: https://ax402.io/privacy
 * Disclaimer: https://ax402.io/disclaimer
 
-Chain metadata (names, explorers, public RPC hints) may be loaded from https://chainid.network/chains.json when a token does not already carry that data. Wallet / RPC calls happen in the shopper's browser only when they choose to pay.
+Chain metadata (names, explorers, public RPC hints) may be loaded from https://chainid.network/chains.json when a token does not already carry that data.
+
+On the pay page (only when a shopper chooses to pay), the browser may also contact:
+
+* **WalletConnect / Reown** — when Hedera settlement is selected and a WalletConnect project ID is configured. Used to discover and connect Hedera wallets (for example HashPack). Data: project ID, session metadata, and wallet account id for signing. Docs: https://docs.reown.com/
+* **Hedera Mirror Node** — public REST endpoints (`mainnet-public.mirrornode.hedera.com` / `testnet.mirrornode.hedera.com`) to read balances and network readiness for Hedera tokens. No private keys are sent.
+* **Public EVM RPC endpoints** — URLs from token metadata or chainid.network, used in the shopper’s browser for balance / network checks and payment signing with their wallet. No server-side private keys are sent.
+
+Wallet extensions (for example MetaMask) run locally in the shopper’s browser; private keys never leave the wallet.
 
 = Source code and build =
 
-Minified frontend assets live in `build/`. Readable source and build tooling:
+Minified frontend assets live in `build/`. Readable source, build tooling, and third-party license notes:
 
 https://github.com/AxLabs/ax402-woocommerce-extension
+
+See also `THIRD_PARTY_LICENSES.md` in the plugin package.
 
 ```
 npm --prefix plugin ci

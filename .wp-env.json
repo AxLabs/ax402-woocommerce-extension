@@ -2,7 +2,7 @@
   "core": null,
   "phpVersion": "8.2",
   "plugins": [
-    "https://downloads.wordpress.org/plugin/woocommerce.latest-stable.zip",
+    "https://downloads.wordpress.org/plugin/woocommerce.11.0.0.zip",
     "./plugin"
   ],
   "config": {

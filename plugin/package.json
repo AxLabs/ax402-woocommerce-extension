@@ -10,8 +10,8 @@
     "test:js": "vitest run --config ../vitest.config.mjs"
   },
   "dependencies": {
-    "@ax402/react-paywall": "^0.0.4",
-    "@ax402/sdk": "^0.0.4",
+    "@ax402/react-paywall": "^0.0.5",
+    "@ax402/sdk": "^0.0.5",
     "@hashgraph/hedera-wallet-connect": "^1.5.1",
     "@hashgraph/proto": "^2.25.0",
     "@walletconnect/modal": "^2.7.0",

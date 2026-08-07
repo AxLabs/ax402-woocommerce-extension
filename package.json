@@ -5,6 +5,7 @@
   "description": "Monorepo for the Ax402 WooCommerce extension",
   "scripts": {
     "env:start": "wp-env start",
+    "env:update": "wp-env start --update",
     "env:stop": "wp-env stop",
     "env:destroy": "wp-env destroy",
     "env:seed": "bash bin/seed-wp-env.sh",
@@ -23,7 +24,7 @@
     "test": "npm run test:unit && npm run test:integration && npm run test:js"
   },
   "devDependencies": {
-    "@ax402/sdk": "^0.0.4",
+    "@ax402/sdk": "^0.0.5",
     "@playwright/test": "^1.51.0",
     "@wordpress/env": "^10.0.0",
     "vitest": "^3.2.7"
