@@ -363,9 +363,11 @@ function InsufficientBalanceStep( { option, balanceAtomic } ) {
 	);
 }
 
-function PayStep( { config, option } ) {
+function PayStep( { config, option, onPaymentSubmitted, startConfirming } ) {
 	const priceLabel = formatPayLabel( option?.amount, option?.symbol );
-	const [ phase, setPhase ] = useState( 'pay' );
+	const [ phase, setPhase ] = useState(
+		startConfirming ? 'confirming' : 'pay'
+	);
 	const [ error, setError ] = useState( '' );
 
 	if ( phase === 'confirming' ) {
@@ -414,6 +416,9 @@ function PayStep( { config, option } ) {
 				inspectOnMount
 				className="ax402-inline-gate"
 				onUnlocked={ async () => {
+					// Freeze the parent balance gate: post-settlement balance is
+					// below the order amount and would otherwise flash "Insufficient".
+					onPaymentSubmitted?.();
 					setPhase( 'confirming' );
 					setError( '' );
 					const confirmingStartedAt = Date.now();
@@ -452,6 +457,8 @@ function PaymentSteps( { config, option, endpointReady, lockError } ) {
 	const [ chainId, setChainId ] = useState( null );
 	const [ balanceAtomic, setBalanceAtomic ] = useState( null );
 	const [ readError, setReadError ] = useState( '' );
+	const [ paymentSubmitted, setPaymentSubmitted ] = useState( false );
+	const [ hadSufficientBalance, setHadSufficientBalance ] = useState( false );
 	const hedera = isHederaOption( option );
 
 	const networkOk = hedera
@@ -463,7 +470,16 @@ function PaymentSteps( { config, option, endpointReady, lockError } ) {
 	);
 
 	useEffect( () => {
-		if ( ! walletAddress || ! option ) {
+		if ( networkOk && balanceOk ) {
+			setHadSufficientBalance( true );
+		}
+	}, [ networkOk, balanceOk ] );
+
+	useEffect( () => {
+		if ( ! walletAddress || ! option || paymentSubmitted ) {
+			if ( paymentSubmitted ) {
+				return undefined;
+			}
 			setChainId( null );
 			setBalanceAtomic( null );
 			return undefined;
@@ -552,7 +568,7 @@ function PaymentSteps( { config, option, endpointReady, lockError } ) {
 			provider.removeListener?.( 'chainChanged', onChain );
 			provider.removeListener?.( 'accountsChanged', refresh );
 		};
-	}, [ walletAddress, option, hedera ] );
+	}, [ walletAddress, option, hedera, paymentSubmitted ] );
 
 	let step = null;
 	if ( ! walletAddress ) {
@@ -564,16 +580,16 @@ function PaymentSteps( { config, option, endpointReady, lockError } ) {
 				description="This store has no payable settlement token configured."
 			/>
 		);
-	} else if ( ! networkOk ) {
+	} else if ( ! networkOk && ! paymentSubmitted ) {
 		step = <SwitchNetworkStep option={ option } />;
-	} else if ( ! balanceOk ) {
+	} else if ( ! balanceOk && ! paymentSubmitted && ! hadSufficientBalance ) {
 		step = (
 			<InsufficientBalanceStep
 				option={ option }
 				balanceAtomic={ balanceAtomic }
 			/>
 		);
-	} else if ( lockError ) {
+	} else if ( lockError && ! paymentSubmitted ) {
 		step = (
 			<StepCard
 				title="Could not prepare payment"
@@ -590,7 +606,7 @@ function PaymentSteps( { config, option, endpointReady, lockError } ) {
 				</button>
 			</StepCard>
 		);
-	} else if ( ! endpointReady ) {
+	} else if ( ! endpointReady && ! paymentSubmitted ) {
 		step = (
 			<StepCard
 				title="Preparing payment…"
@@ -600,7 +616,14 @@ function PaymentSteps( { config, option, endpointReady, lockError } ) {
 			</StepCard>
 		);
 	} else {
-		step = <PayStep config={ config } option={ option } />;
+		step = (
+			<PayStep
+				config={ config }
+				option={ option }
+				startConfirming={ paymentSubmitted }
+				onPaymentSubmitted={ () => setPaymentSubmitted( true ) }
+			/>
+		);
 	}
 
 	return (
