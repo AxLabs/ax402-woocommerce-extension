@@ -319,6 +319,14 @@ final class Ax402_WC_Platform_Tokens
             $rpc = $meta['rpc_url'] !== '' ? $meta['rpc_url'] : $catalog->rpc_url($network);
             $explorer = $meta['explorer_url'] !== '' ? $meta['explorer_url'] : $catalog->explorer_url($network);
             $is_hedera = self::is_hedera_network($network);
+            $is_stable = Ax402_WC_Stablecoin_One_To_One_Rates::is_stablecoin($symbol);
+            $rate_source = $is_stable ? 'stablecoin-1to1' : 'ax402-control-plane';
+            $rate_date = '';
+            if (!$is_stable && $rates instanceof Ax402_WC_Composite_Exchange_Rates) {
+                $rate_date = $rates->last_rate_date();
+            } elseif (!$is_stable && $rates instanceof Ax402_WC_Control_Plane_Exchange_Rates) {
+                $rate_date = $rates->last_rate_date();
+            }
 
             $options[] = [
                 'token_id' => $token_id,
@@ -331,6 +339,9 @@ final class Ax402_WC_Platform_Tokens
                 'amount' => $amount,
                 'amount_atomic' => $atomic,
                 'rate' => $rate,
+                'rate_date' => $rate_date,
+                'rate_source' => $rate_source,
+                'captured_at' => gmdate('c'),
                 'chain_id_hex' => self::chain_id_hex($network),
                 'rpc_url' => $rpc,
                 'explorer_url' => $explorer,

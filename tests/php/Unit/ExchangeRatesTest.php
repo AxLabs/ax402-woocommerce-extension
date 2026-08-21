@@ -110,6 +110,7 @@ final class ExchangeRatesTest extends TestCase
         $this->assertEqualsWithDelta(1.0 / 1.04796887214, (float) $xgas, 1e-12);
         $this->assertCount(1, $urls);
         $this->assertStringContainsString('date=2026-08-03', $urls[0]);
+        $this->assertSame('2026-08-03', $rates->last_rate_date());
 
         // Stables still win via composite when client is wired.
         $composite = Ax402_WC_Composite_Exchange_Rates::default($client);

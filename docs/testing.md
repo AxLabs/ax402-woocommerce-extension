@@ -12,6 +12,8 @@ npm run test:js
 
 PHP unit tests run via Docker Composer if local PHP is unavailable.
 
+UCP protocol rules (cents, discovery shape, leak scanner, asset matching, MCP `payment_required` / `_meta["x402/payment"]`) live in `tests/php/Unit/Ucp*.php`. Live UCP settlement is `npm run test:e2e-ucp` ([ucp.md](ucp.md)).
+
 ## Live control plane
 
 ```bash
@@ -33,6 +35,7 @@ Quick path once `.env` is filled and `wp-env` is up:
 npm run env:e2e          # seed + readiness (+ WP_BASE_URL sync)
 # with tunnel running and WP_BASE_URL set:
 npm run test:e2e-pay     # programmatic agent pay
+npm run test:e2e-ucp     # UCP agent (AX402_UCP_ENABLED=yes, then re-seed)
 ```
 
 ### Playwright UI

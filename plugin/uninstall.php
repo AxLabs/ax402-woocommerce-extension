@@ -17,6 +17,7 @@ $option_keys = [
     'ax402_wc_cors_origins',
     'ax402_wc_cors_synced_at',
     'ax402_wc_cors_error',
+    'ax402_wc_ucp_rewrite',
     'woocommerce_ax402_settings',
 ];
 

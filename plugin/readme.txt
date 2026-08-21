@@ -4,7 +4,7 @@ Tags: woocommerce, payments, crypto, usdc, x402
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 8.1
-Stable tag: 0.1.0
+Stable tag: 0.2.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -76,11 +76,20 @@ Order totals are priced in USD and mapped to Ax402 settlement tokens. Non-USD st
 
 Yes, by design. Agent browse/buy routes are public storefront APIs. The fulfill callback is public so Ax402 can confirm payment; it is gated by WooCommerce order key plus a one-time fulfill token. Settlement selection requires a valid order key.
 
+= What is UCP? =
+
+Optional Universal Commerce Protocol support for buying agents (`/.well-known/ucp` and `/wp-json/ucp/v1`). Off by default. Enable it on the Ax402 settings screen. The human pay page does not change.
+
 = Can I hide the Ax402 credit on the pay page? =
 
 Yes. In gateway settings, leave “Show Ax402 credit on the pay page” unchecked (default).
 
 == Changelog ==
+
+= 0.2.0 =
+* Optional UCP for buying agents: `/.well-known/ucp` and `/wp-json/ucp/v1` (off by default)
+* Catalog search/lookup, checkout with WooCommerce shipping/tax, x402 402 at complete
+* Human pay page and legacy `/wp-json/ax402/v1` agent REST unchanged
 
 = 0.1.0 =
 * Initial release: Ax402 / x402 WooCommerce payment gateway

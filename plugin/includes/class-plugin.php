@@ -38,6 +38,10 @@ final class Ax402_WC_Plugin
         (new Ax402_WC_Pay_Page())->register();
         (new Ax402_WC_Facade())->register();
         (new Ax402_WC_Endpoint_Cleanup())->register();
+        add_action('init', static function (): void {
+            (new Ax402_WC_Ucp_Discovery())->register();
+        });
+        add_action('update_option_ax402_wc_settings', [Ax402_WC_Ucp_Profile_Builder::class, 'bust']);
     }
 
     /**
@@ -108,6 +112,7 @@ final class Ax402_WC_Plugin
         (new Ax402_WC_Fulfill_Controller())->register();
         (new Ax402_WC_Agent_Rest_Controller())->register();
         (new Ax402_WC_Gateway_Proxy_Controller())->register();
+        (new Ax402_WC_Ucp_Rest_Controller())->register();
     }
 
     public function register_blocks(): void

@@ -26,7 +26,9 @@ final class Ax402_WC_Settings
      *   hedera_gateway_host:string,
      *   hedera_api_slug:string,
      *   enabled_token_ids:list<string>,
-     *   settlement_reconcile:string
+     *   settlement_reconcile:string,
+     *   ucp_enabled:string,
+     *   ucp_max_amount:string
      * }
      */
     public static function all(): array
@@ -47,6 +49,8 @@ final class Ax402_WC_Settings
             'hedera_api_slug' => '',
             'enabled_token_ids' => [],
             'settlement_reconcile' => 'yes',
+            'ucp_enabled' => 'no',
+            'ucp_max_amount' => '',
         ];
 
         $stored = get_option(self::OPTION_KEY, []);
@@ -97,7 +101,14 @@ final class Ax402_WC_Settings
             'hedera_api_slug' => (string) $merged['hedera_api_slug'],
             'enabled_token_ids' => $token_ids,
             'settlement_reconcile' => $reconcile,
+            'ucp_enabled' => self::sanitize_yes_no($merged['ucp_enabled'] ?? 'no'),
+            'ucp_max_amount' => self::sanitize_max_amount($merged['ucp_max_amount'] ?? ''),
         ];
+    }
+
+    public static function ucp_enabled(): bool
+    {
+        return self::all()['ucp_enabled'] === 'yes';
     }
 
     /**
@@ -210,6 +221,12 @@ final class Ax402_WC_Settings
             'settlement_reconcile' => self::sanitize_yes_no(
                 $input['settlement_reconcile'] ?? $current['settlement_reconcile']
             ),
+            'ucp_enabled' => self::sanitize_yes_no(
+                $input['ucp_enabled'] ?? $current['ucp_enabled']
+            ),
+            'ucp_max_amount' => array_key_exists('ucp_max_amount', $input)
+                ? self::sanitize_max_amount($input['ucp_max_amount'])
+                : $current['ucp_max_amount'],
         ];
 
         $api_key = $current['api_key'];
@@ -225,6 +242,7 @@ final class Ax402_WC_Settings
         unset($to_store['api_key']);
 
         update_option(self::OPTION_KEY, $to_store, false);
+        Ax402_WC_Ucp_Profile_Builder::bust();
     }
 
     public static function sanitize_hedera_account_id(string $value): string
@@ -263,6 +281,12 @@ final class Ax402_WC_Settings
     {
         $normalized = strtolower(trim((string) $value));
         return $normalized === 'yes' ? 'yes' : 'no';
+    }
+
+    private static function sanitize_max_amount(mixed $value): string
+    {
+        $digits = preg_replace('/\D+/', '', (string) $value);
+        return is_string($digits) ? $digits : '';
     }
 
     public static function settlement_reconcile_enabled(): bool

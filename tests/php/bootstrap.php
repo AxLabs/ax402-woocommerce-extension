@@ -9,7 +9,7 @@ if (!defined('ABSPATH')) {
     define('ABSPATH', $root . '/');
 }
 if (!defined('AX402_WC_VERSION')) {
-    define('AX402_WC_VERSION', '0.1.0');
+    define('AX402_WC_VERSION', '0.2.0');
 }
 if (!defined('AX402_WC_PLUGIN_DIR')) {
     define('AX402_WC_PLUGIN_DIR', $plugin . '/');
@@ -19,6 +19,18 @@ if (!defined('AX402_WC_PLUGIN_URL')) {
 }
 if (!defined('AX402_WC_PLUGIN_FILE')) {
     define('AX402_WC_PLUGIN_FILE', $plugin . '/ax402-for-woocommerce.php');
+}
+
+if (!function_exists('wp_json_encode')) {
+    /**
+     * @param mixed $data
+     */
+    function wp_json_encode($data, $options = 0, $depth = 512)
+    {
+        unset($depth);
+
+        return json_encode($data, $options);
+    }
 }
 
 require_once $plugin . '/includes/class-money.php';

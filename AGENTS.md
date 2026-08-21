@@ -21,9 +21,10 @@ WordPress / WooCommerce **payment provider** for Ax402 / x402. Catalog stays USD
 ## Layout
 
 ```text
-plugin/     WordPress plugin
-bin/        seed, phpunit, package, version helpers
-docs/       architecture, e2e, merchant, testing
-tests/      PHP / JS / Playwright
-RELEASE.md  release process (humans + agents)
+plugin/          WordPress plugin
+bin/             seed, phpunit, package, version helpers
+docs/            architecture, e2e, merchant, testing, ucp
+docs/prompts/    local Cursor/agent prompts (gitignored; not shipped)
+tests/           PHP / JS / Playwright
+RELEASE.md       release process (humans + agents)
 ```

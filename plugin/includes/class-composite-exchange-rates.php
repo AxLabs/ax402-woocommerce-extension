@@ -53,4 +53,21 @@ final class Ax402_WC_Composite_Exchange_Rates implements Ax402_WC_Exchange_Rate_
 
         return null;
     }
+
+    /**
+     * Date of the control-plane FX snapshot, if that provider was used.
+     */
+    public function last_rate_date(): string
+    {
+        foreach ($this->providers as $provider) {
+            if ($provider instanceof Ax402_WC_Control_Plane_Exchange_Rates) {
+                $date = $provider->last_rate_date();
+                if ($date !== '') {
+                    return $date;
+                }
+            }
+        }
+
+        return '';
+    }
 }

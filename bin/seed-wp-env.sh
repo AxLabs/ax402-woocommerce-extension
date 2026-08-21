@@ -34,6 +34,7 @@ print(json.dumps({
   "walletconnect_project_id": os.environ.get("AX402_WALLETCONNECT_PROJECT_ID") or "",
   "network_mode": os.environ.get("AX402_NETWORK") or "sepolia",
   "api_key": os.environ.get("AX402_API_KEY") or "",
+  "ucp_enabled": "yes" if os.environ.get("AX402_UCP_ENABLED") == "yes" else "no",
 }))
 PY
 trap 'rm -f "$SEED_GATEWAY_FILE"' EXIT
@@ -60,6 +61,9 @@ $current = get_option("woocommerce_ax402_settings", []);
 if (!is_array($current)) {
   $current = [];
 }
+if (($incoming["ucp_enabled"] ?? "") === "yes") {
+  $gateway["ucp_enabled"] = "yes";
+}
 foreach (["base_url", "pay_to_address", "pay_to_hedera_account_id", "walletconnect_project_id", "network_mode"] as $key) {
   if ($gateway[$key] === "" && !empty($current[$key])) {
     $gateway[$key] = (string) $current[$key];
@@ -84,6 +88,9 @@ if (class_exists("Ax402_WC_Settings")) {
   $api_key = trim((string) ($incoming["api_key"] ?? ""));
   if ($api_key !== "") {
     $plugin_update["api_key"] = $api_key;
+  }
+  if (($incoming["ucp_enabled"] ?? "") === "yes") {
+    $plugin_update["ucp_enabled"] = "yes";
   }
   Ax402_WC_Settings::update($plugin_update);
 }
@@ -169,9 +176,13 @@ function ax402_seed_product(array $p): void {
   $product->set_downloadable(!empty($p["downloadable"]));
   $product->set_sold_individually(false);
 
-  // Only attach once — re-sideloading on every seed would be wasteful and used
-  // to delete the tracked PNGs when tmp_name pointed at the plugin assets.
-  if (!empty($p["image"]) && (int) $product->get_image_id() <= 0) {
+  // Sideload when missing. Do not re-copy when the file is already on disk —
+  // media_handle_sideload used to delete tracked plugin PNGs if tmp_name pointed
+  // at those assets (copy-first in ax402_seed_attach_image avoids that).
+  $current_image_id = (int) $product->get_image_id();
+  $current_file = $current_image_id > 0 ? (string) get_attached_file($current_image_id) : "";
+  $need_image = !empty($p["image"]) && ($current_image_id <= 0 || $current_file === "" || !file_exists($current_file));
+  if ($need_image) {
     $image_id = ax402_seed_attach_image($p["image"], $p["name"]);
     if ($image_id > 0) {
       $product->set_image_id($image_id);
@@ -244,10 +255,51 @@ $products = [
     "description" => "A \$0.25 demo pack for larger micropayment checkout tests.",
     "image" => $base . "/demo-product-pack.png",
   ],
+  [
+    "sku" => "ax402-ship-box",
+    "name" => "Ax402 Ship Box",
+    "price" => "0.10",
+    "virtual" => false,
+    "downloadable" => false,
+    "short" => "Physical demo SKU for UCP shipping.",
+    "description" => "A \$0.10 physical demo product used to exercise UCP tax and shipping.",
+    "image" => $base . "/demo-product-pack.png",
+  ],
 ];
 
 foreach ($products as $product) {
   ax402_seed_product($product);
+}
+
+update_option("woocommerce_calc_shipping", "yes");
+update_option("woocommerce_ship_to_countries", "all");
+if (class_exists("WC_Shipping_Zone") && class_exists("WC_Shipping_Zones")) {
+  $zone_id = 0;
+  foreach (WC_Shipping_Zones::get_zones() as $existing_zone) {
+    if (($existing_zone["zone_name"] ?? "") === "Ax402 UCP E2E") {
+      $zone_id = (int) ($existing_zone["zone_id"] ?? $existing_zone["id"] ?? 0);
+      break;
+    }
+  }
+  if ($zone_id <= 0) {
+    $zone = new WC_Shipping_Zone();
+    $zone->set_zone_name("Ax402 UCP E2E");
+    $zone->save();
+    $zone->add_location("US", "country");
+    $instance_id = $zone->add_shipping_method("flat_rate");
+    $option_key = "woocommerce_flat_rate_" . (int) $instance_id . "_settings";
+    $current_method = get_option($option_key, []);
+    if (!is_array($current_method)) {
+      $current_method = [];
+    }
+    $current_method["title"] = "Flat rate";
+    $current_method["cost"] = "0.05";
+    $current_method["tax_status"] = "taxable";
+    update_option($option_key, $current_method);
+    echo "seeded shipping zone Ax402 UCP E2E flat_rate={$instance_id}\n";
+  } else {
+    echo "exists shipping zone Ax402 UCP E2E id={$zone_id}\n";
+  }
 }
 
 echo "Seed complete.\n";

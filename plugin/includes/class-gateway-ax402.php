@@ -174,6 +174,28 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
                 ),
                 'default' => ($plugin['settlement_reconcile'] ?? 'yes') === 'yes' ? 'yes' : 'no',
             ],
+            'ucp_enabled' => [
+                'title' => __('UCP for agents', 'ax402-for-woocommerce'),
+                'type' => 'checkbox',
+                'label' => __(
+                    'Enable Universal Commerce Protocol (/.well-known/ucp and /wp-json/ucp/v1)',
+                    'ax402-for-woocommerce'
+                ),
+                'description' => __(
+                    'Off by default. Independent of the human checkout method. Buying agents discover the store, browse the catalog, and pay via x402 at checkout complete. Does not change the pay page or the legacy /wp-json/ax402/v1 agent API.',
+                    'ax402-for-woocommerce'
+                ),
+                'default' => ($plugin['ucp_enabled'] ?? 'no') === 'yes' ? 'yes' : 'no',
+            ],
+            'ucp_max_amount' => [
+                'title' => __('UCP max payment (base units)', 'ax402-for-woocommerce'),
+                'type' => 'text',
+                'description' => __(
+                    'Optional ceiling advertised to agents as x402.max_amount (integer token base units, digits only). Leave blank for no advertised ceiling.',
+                    'ax402-for-woocommerce'
+                ),
+                'default' => (string) ($plugin['ucp_max_amount'] ?? ''),
+            ],
             'show_powered_by' => [
                 'title' => __('Pay page credit', 'ax402-for-woocommerce'),
                 'type' => 'checkbox',
@@ -511,6 +533,8 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
             'api_slug' => (string) $this->get_option('api_slug', ''),
             'enabled_token_ids' => $this->get_option('settlement_tokens', []),
             'settlement_reconcile' => $this->get_option('settlement_reconcile', 'yes') === 'yes' ? 'yes' : 'no',
+            'ucp_enabled' => $this->get_option('ucp_enabled', 'no') === 'yes' ? 'yes' : 'no',
+            'ucp_max_amount' => (string) $this->get_option('ucp_max_amount', ''),
         ];
 
         if (!is_array($payload['enabled_token_ids'])) {

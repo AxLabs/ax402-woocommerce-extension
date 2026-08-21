@@ -138,6 +138,20 @@ Flow: `POST /wp-json/ax402/v1/products|orders` → buyer SDK pays gateway URL �
 
 Optional: `E2E_PRODUCT_ID=<id>` to pin a SKU (otherwise first catalog product).
 
+### A2) UCP agent pay
+
+```bash
+# .env: WP_BASE_URL, AX402_EVM_PRIVATE_KEY, AX402_UCP_ENABLED=yes
+# re-seed after setting AX402_UCP_ENABLED so /.well-known/ucp is served
+npm run env:e2e
+set -a && source .env && set +a
+npm run test:e2e-ucp
+# physical SKU + shipping:
+# E2E_UCP_PHYSICAL=1 npm run test:e2e-ucp
+```
+
+Flow: discover → catalog search → create cart → create checkout from `cart_id` → MCP `complete_checkout` (structured `payment_required`) → buyer signs → MCP retry with `_meta["x402/payment"]` → GET session `completed` → GET order. Set `E2E_UCP_TRANSPORT=rest` to pay via REST complete headers instead. Details: [ucp.md](ucp.md).
+
 ### B) Human / MetaMask
 
 1. Open `$WP_BASE_URL` (or localhost if only testing UI)

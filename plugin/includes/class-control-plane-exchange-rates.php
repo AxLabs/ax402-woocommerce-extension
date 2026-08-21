@@ -28,6 +28,9 @@ final class Ax402_WC_Control_Plane_Exchange_Rates implements Ax402_WC_Exchange_R
     /** @var \DateTimeImmutable|null Clock override for tests (UTC). */
     private ?\DateTimeImmutable $now;
 
+    /** YYYY-MM-DD of the control-plane payload that produced the current map. */
+    private string $resolved_date = '';
+
     public function __construct(
         Ax402_WC_Control_Plane_Client $client,
         bool $force_refresh = false,
@@ -58,6 +61,15 @@ final class Ax402_WC_Control_Plane_Exchange_Rates implements Ax402_WC_Exchange_R
 
         $key = self::lookup_key($symbol, $network);
         return $this->tokens_per_usd[$key] ?? null;
+    }
+
+    /**
+     * Control-plane rate date used for the current map (empty if unknown).
+     */
+    public function last_rate_date(): string
+    {
+        $this->ensure_loaded();
+        return $this->resolved_date;
     }
 
     /**
@@ -174,6 +186,7 @@ final class Ax402_WC_Control_Plane_Exchange_Rates implements Ax402_WC_Exchange_R
                 continue;
             }
 
+            $this->resolved_date = $date;
             return self::index_rates($payload);
         }
 
@@ -226,7 +239,18 @@ final class Ax402_WC_Control_Plane_Exchange_Rates implements Ax402_WC_Exchange_R
             return null;
         }
         $cached = get_transient(self::cache_key_for_base_url($this->client->base_url()));
-        return is_array($cached) ? $cached : null;
+        if (!is_array($cached) || $cached === []) {
+            return null;
+        }
+        if (($cached['v'] ?? 0) === 2 && isset($cached['map']) && is_array($cached['map'])) {
+            $this->resolved_date = (string) ($cached['date'] ?? '');
+            return $cached['map'];
+        }
+        if (!isset($cached['v'])) {
+            return $cached;
+        }
+
+        return null;
     }
 
     /**
@@ -239,7 +263,11 @@ final class Ax402_WC_Control_Plane_Exchange_Rates implements Ax402_WC_Exchange_R
         }
         set_transient(
             self::cache_key_for_base_url($this->client->base_url()),
-            $map,
+            [
+                'v' => 2,
+                'date' => $this->resolved_date,
+                'map' => $map,
+            ],
             self::CACHE_TTL_SECONDS
         );
     }

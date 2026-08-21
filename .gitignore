@@ -9,6 +9,10 @@
 plugin/.e2e-config.json
 plugin/.seed-gateway.json
 
+# Local agent prompts (keep on disk, never ship)
+docs/prompts/
+/CURSOR-UCP-PROMPT.md
+
 # Temporary repro until Ax402 gateway multi-accept amount rewrite is confirmed
 bin/repro-ax402-zchf-amount-rewrite.py
 

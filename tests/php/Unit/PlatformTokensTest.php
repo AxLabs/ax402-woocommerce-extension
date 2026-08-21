@@ -94,6 +94,8 @@ final class PlatformTokensTest extends TestCase
         $this->assertSame('22500000', $options[0]['amount_atomic']);
         $this->assertSame('22500000', $options[1]['amount_atomic']);
         $this->assertSame('22500000', $options[0]['accept']['amount']);
+        $this->assertSame('stablecoin-1to1', $options[0]['rate_source']);
+        $this->assertNotSame('', $options[0]['captured_at']);
     }
 
     public function test_default_enabled_token_ids_sepolia_usdc(): void

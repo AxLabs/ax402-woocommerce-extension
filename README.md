@@ -13,6 +13,7 @@ This is a gateway extension — not a full storefront. Catalog, cart, customers,
 - Per-order gateway endpoints with multi-`accepts`, priced from the USD cart total
 - Human pay page: settlement picker, network switch + balance checks, `@ax402/react-paywall`
 - Agent REST: products, create order, order status (same multi-accept payment URL)
+- Optional UCP for buying agents (`/.well-known/ucp`, `/wp-json/ucp/v1`) — off by default; see [docs/ucp.md](docs/ucp.md)
 - Fulfill upstream secured by `order_key` + one-time token
 - `wp-env` local development + demo product seed
 - Unit + live control-plane tests
@@ -24,6 +25,7 @@ This is a gateway extension — not a full storefront. Catalog, cart, customers,
 | [**Context**](docs/context.md) | What the extension is / is not, concerns, currency model |
 | [**Local development**](docs/local-development.md) | Start wp-env, `.env`, seed products, tunnel, first payment |
 | [**E2E environment**](docs/e2e.md) | Ready-to-go seed + ngrok + programmatic / MetaMask pay |
+| [**UCP for agents**](docs/ucp.md) | Discovery, catalog, cart, checkout, order, x402 402-at-complete, min-leak adapter |
 | [Architecture](docs/architecture.md) | Payment flow, settlement lock, ngrok upstream_auth, reconcile |
 | [**Releases**](RELEASE.md) | SemVer, tagging, GitHub Releases, agent checklist |
 | [Merchant setup](docs/merchant-setup.md) | Production checklist + agent buy sketch |
@@ -73,6 +75,7 @@ Full E2E (tunnel + pay): [docs/e2e.md](docs/e2e.md).
 npm test                 # PHP unit + integration + JS unit
 npm run test:live-cp     # needs AX402_API_KEY (+ PAY_TO for create/delete)
 npm run test:e2e-pay     # needs public WP_BASE_URL + buyer key (see docs/e2e.md)
+npm run test:e2e-ucp     # UCP agent flow; set AX402_UCP_ENABLED=yes then re-seed
 ```
 
 See [docs/testing.md](docs/testing.md) and [docs/e2e.md](docs/e2e.md).

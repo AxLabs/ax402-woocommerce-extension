@@ -9,7 +9,8 @@ It supports two buyer types on the same order lifecycle:
 | Buyer | How they pay |
 |---|---|
 | **Human** | Checkout → store pay page → wallet (e.g. MetaMask) via `@ax402/react-paywall` |
-| **Agent** | REST create-order → pay the Ax402 gateway URL with a buyer SDK / CLI |
+| **Agent (legacy REST)** | `POST /wp-json/ax402/v1/orders` → pay the Ax402 gateway URL with a buyer SDK |
+| **Agent (UCP)** | `GET /.well-known/ucp` + REST `/wp-json/ucp/v1` catalog/cart/checkout/order (MCP at `/mcp`); x402 402 at `complete` (opt-in, off by default). Protocol 2026-04-08. See [ucp.md](ucp.md). |
 
 Hosted control plane: `https://api.ax402.io`.
 

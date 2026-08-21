@@ -2,7 +2,7 @@
 
 This guide walks from a clean clone to a working WordPress + WooCommerce shop with the Ax402 payment gateway, demo products, and (optionally) a public tunnel for real payments.
 
-For product context and what the plugin is *for*, see [context.md](context.md).
+For product context and what the plugin is *for*, see [context.md](context.md). Agent UCP (opt-in): [ucp.md](ucp.md).
 
 ---
 
