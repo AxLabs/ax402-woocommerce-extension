@@ -9,8 +9,8 @@ defined('ABSPATH') || exit;
  * Follow official UCP 2026-04-08: `services` is an object of arrays with
  * `transport` + `endpoint`. REST stays first so existing REST agents keep
  * working; MCP is advertised second for the Shopify UCP CLI (MCP-only
- * negotiation in CLI 0.6.x). Do not copy the stale binding example that used
- * a URL array and `map_order` as a string.
+ * negotiation in CLI 0.6.x). Official UCP and the binding `examples/discovery.json`
+ * both use maps of arrays; omit `map_order`.
  */
 final class Ax402_WC_Ucp_Profile_Builder
 {

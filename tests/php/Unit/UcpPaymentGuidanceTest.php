@@ -28,6 +28,8 @@ final class UcpPaymentGuidanceTest extends TestCase
         $this->assertStringContainsString('payment.instruments', $message['content']);
         $this->assertStringContainsString('x402.assets', $message['content']);
         $this->assertStringContainsString('payment_required.accepts', $message['content']);
+        $this->assertStringContainsString('structuredContent', $message['content']);
+        $this->assertStringContainsString('payment.payment_signature', $message['content']);
         $this->assertStringContainsString(Ax402_WC_Ucp_Response::HANDLER_SPEC, $message['content']);
         $this->assertStringNotContainsString('saw', strtolower($message['content']));
         $this->assertStringNotContainsString('simple agent wallet', strtolower($message['content']));
@@ -53,6 +55,8 @@ final class UcpPaymentGuidanceTest extends TestCase
         }
         $this->assertIsArray($complete);
         $this->assertStringContainsString('PAYMENT-SIGNATURE', $complete['description']);
+        $this->assertStringContainsString('payment.payment_signature', $complete['description']);
+        $this->assertStringContainsString('structuredContent', $complete['description']);
         $this->assertStringContainsString('org.x402.complete', $complete['description']);
         $this->assertStringContainsString('resource.url', $complete['description']);
         $this->assertStringContainsString('x402/payment', $complete['description']);

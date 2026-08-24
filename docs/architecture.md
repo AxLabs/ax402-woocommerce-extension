@@ -12,7 +12,7 @@ Full E2E (tunnel + pay): [e2e.md](e2e.md).
 4. **Woo fulfill REST** — `GET /wp-json/ax402/v1/fulfill/{order_key}/{fulfill_token}` marks the order paid.
 5. **Human pay page** — storefront page mounting `@ax402/react-paywall` against the gateway URL.
 6. **Agent REST** — catalog + create order + status (+ settlement lock) under `/wp-json/ax402/v1/*`.
-7. **UCP for agents (opt-in)** — `/.well-known/ucp` + `/wp-json/ucp/v1` catalog, cart, checkout, order (REST) and `/wp-json/ucp/v1/mcp` (MCP JSON-RPC). Protocol **2026-04-08**. REST 402 at complete; MCP `complete_checkout` carries structured `payment_required` / `_meta["x402/payment"]`. Plugin proxies the signature to Ax402. Human pay page unchanged. See [ucp.md](ucp.md).
+7. **UCP for agents (opt-in)** — `/.well-known/ucp` + `/wp-json/ucp/v1` catalog, cart, checkout, order (REST) and `/wp-json/ucp/v1/mcp` (MCP JSON-RPC). Protocol **2026-04-08**. REST 402 at complete; MCP `complete_checkout` carries PaymentRequired on `structuredContent` / `_meta["x402/payment"]` on retry. Plugin proxies the signature to Ax402. Human pay page unchanged. See [ucp.md](ucp.md).
 8. **Settlement reconcile (optional)** — if the gateway recorded an on-chain settlement but never reached fulfill, status polls can still mark the order paid.
 
 ## Payment flow (human)

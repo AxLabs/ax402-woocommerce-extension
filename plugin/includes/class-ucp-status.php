@@ -11,6 +11,7 @@ defined('ABSPATH') || exit;
 final class Ax402_WC_Ucp_Status
 {
     public const INCOMPLETE = 'incomplete';
+    public const REQUIRES_ESCALATION = 'requires_escalation';
     public const READY = 'ready_for_complete';
     public const IN_PROGRESS = 'complete_in_progress';
     public const COMPLETED = 'completed';
@@ -67,21 +68,35 @@ final class Ax402_WC_Ucp_Status
         }
 
         if ($needs_shipping && $has_destination && !$has_shipping_selection) {
-            $code = $has_rates ? 'missing' : 'requires_escalation';
-            $content = $has_rates
-                ? 'Select a shipping option.'
-                : 'No shipping rates are available for this destination.';
-            $messages[] = Ax402_WC_Ucp_Response::message(
-                'error',
-                $code,
-                $content,
-                'recoverable',
-                '$.fulfillment.methods[0].groups[0].selected_option_id'
-            );
+            if ($has_rates) {
+                $messages[] = Ax402_WC_Ucp_Response::message(
+                    'error',
+                    'missing',
+                    'Select a shipping option.',
+                    'recoverable',
+                    '$.fulfillment.methods[0].groups[0].selected_option_id'
+                );
+            } else {
+                $messages[] = Ax402_WC_Ucp_Response::message(
+                    'error',
+                    'invalid',
+                    'No shipping rates are available for this destination.',
+                    'requires_buyer_input',
+                    '$.fulfillment.methods[0].groups[0].selected_option_id'
+                );
+            }
         }
 
+        $needs_human = $needs_shipping && $has_destination && !$has_shipping_selection && !$has_rates;
         $blocked = $messages !== [] || !$total_positive || !$in_stock
             || ($needs_shipping && (!$has_destination || !$has_shipping_selection));
+
+        if ($needs_human) {
+            return [
+                'status' => self::REQUIRES_ESCALATION,
+                'messages' => $messages,
+            ];
+        }
 
         return [
             'status' => $blocked ? self::INCOMPLETE : self::READY,

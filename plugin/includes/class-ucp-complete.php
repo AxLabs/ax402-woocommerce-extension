@@ -119,12 +119,12 @@ final class Ax402_WC_Ucp_Complete
             (string) ($matched['tokenId'] ?? '')
         );
 
-        $signature = $this->http->header_from_request($request, 'payment-signature');
+        $signature = Ax402_WC_Ucp_Mcp_Payment::signature_from_body($body);
         if ($signature === '') {
-            $signature = $this->http->header_from_request($request, 'x-payment');
+            $signature = $this->http->header_from_request($request, 'payment-signature');
         }
         if ($signature === '') {
-            $signature = Ax402_WC_Ucp_Mcp_Payment::signature_from_body($body);
+            $signature = $this->http->header_from_request($request, 'x-payment');
         }
 
         if ($signature === '') {
@@ -241,9 +241,9 @@ final class Ax402_WC_Ucp_Complete
             'payment-signature' => $signature,
             'accept' => 'application/json',
         ];
-        $sig_data = $this->http->header_from_request($request, 'payment-signature-data');
+        $sig_data = Ax402_WC_Ucp_Mcp_Payment::signature_data_from_body($body);
         if ($sig_data === '') {
-            $sig_data = Ax402_WC_Ucp_Mcp_Payment::signature_data_from_body($body);
+            $sig_data = $this->http->header_from_request($request, 'payment-signature-data');
         }
         if ($sig_data !== '') {
             $headers['payment-signature-data'] = $sig_data;

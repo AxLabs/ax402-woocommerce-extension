@@ -127,6 +127,16 @@ final class UcpMcpTest extends TestCase
         $this->assertIsArray($parts['body']['fulfillment']);
     }
 
+    public function test_unwrap_treats_payment_only_checkout_body_as_unwrapped(): void
+    {
+        $body = Ax402_WC_Ucp_Mcp::unwrap_shopping_body([
+            'payment' => [
+                'payment_signature' => 'sig-from-body',
+            ],
+        ], 'checkout');
+        $this->assertSame('sig-from-body', $body['payment']['payment_signature']);
+    }
+
     public function test_unwrap_accepts_flat_cli_input_under_one_wrapper(): void
     {
         $body = Ax402_WC_Ucp_Mcp::unwrap_shopping_body([

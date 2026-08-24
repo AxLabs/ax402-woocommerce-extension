@@ -8,9 +8,11 @@ defined('ABSPATH') || exit;
  *
  * REST complete keeps the challenge in PAYMENT-REQUIRED. MCP has no usable
  * headers, so the same PaymentRequired object is copied into the tool result
- * as `payment_required` (and result._meta["x402/payment-required"]). The retry
- * carries the PaymentPayload as a structured argument or _meta["x402/payment"];
- * this helper encodes that object to the gateway's PAYMENT-SIGNATURE header.
+ * as structuredContent (x402-standard) plus nested `payment_required` for UCP
+ * session clients, and MAY be mirrored at result._meta["x402/payment-required"].
+ * Retry: params._meta["x402/payment"] or payment.payment_signature in the body
+ * (body is first-class; Hedera JWTs often exceed header limits). This helper
+ * encodes that object to the gateway's PAYMENT-SIGNATURE header.
  */
 final class Ax402_WC_Ucp_Mcp_Payment
 {

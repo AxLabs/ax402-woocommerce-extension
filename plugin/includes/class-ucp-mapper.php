@@ -85,6 +85,13 @@ final class Ax402_WC_Ucp_Mapper
             $payload['quote'] = $quote;
         }
 
+        if ($status !== Ax402_WC_Ucp_Status::COMPLETED && $status !== Ax402_WC_Ucp_Status::CANCELED) {
+            $continue = Ax402_WC_Ucp_Response::continue_url();
+            if ($continue !== '') {
+                $payload['continue_url'] = $continue;
+            }
+        }
+
         Ax402_WC_Ucp_Leak::assert_clean($payload, Ax402_WC_Settings::all());
 
         return $payload;

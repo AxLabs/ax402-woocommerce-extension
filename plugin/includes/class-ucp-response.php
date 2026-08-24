@@ -56,7 +56,8 @@ final class Ax402_WC_Ucp_Response
         $url = self::checkout_complete_url($session_id);
         $content = 'Payment required (org.x402.payment). This checkout is ready; complete without an x402 signature does not place the order. '
             . 'Pay by HTTP POST ' . $url . ' using any x402 wallet (expect HTTP 402 / PAYMENT-REQUIRED, then retry that same URL with PAYMENT-SIGNATURE). '
-            . 'On MCP, retry complete_checkout with params._meta["x402/payment"] after signing structuredContent.payment_required. '
+            . 'On MCP, retry complete_checkout with params._meta["x402/payment"] after signing structuredContent (x402 PaymentRequired: x402Version, resource, accepts) or nested structuredContent.payment_required. '
+            . 'A complete payment MUST be possible with payment.payment_signature / payment.payment_signature_data in the JSON body (Hedera JWTs often exceed header size limits); PAYMENT-SIGNATURE is optional when the body carries the payload. '
             . 'Pay that shop complete URL (also links[] type org.x402.complete), not payment_required.resource.url (Ax402 gateway resource inside the signed challenge) and not the MCP JSON-RPC URL. '
             . 'payment_required.accepts is only the selected (or default) settlement token; each token is a separate x402 resource. '
             . 'See payment.instruments[] for every prepared network/asset. To quote another token, PUT/update checkout or retry complete with that instrument selected (network + asset), then pay the new challenge. '
@@ -119,6 +120,30 @@ final class Ax402_WC_Ucp_Response
         }
 
         return $message;
+    }
+
+    /**
+     * Human checkout URL for UCP continue_url (MUST when status is requires_escalation).
+     */
+    public static function continue_url(): string
+    {
+        if (function_exists('wc_get_checkout_url')) {
+            $url = wc_get_checkout_url();
+            if (is_string($url) && $url !== '') {
+                return $url;
+            }
+        }
+        if (function_exists('wc_get_page_permalink')) {
+            $shop = wc_get_page_permalink('shop');
+            if (is_string($shop) && $shop !== '') {
+                return $shop;
+            }
+        }
+        if (function_exists('home_url')) {
+            return home_url('/');
+        }
+
+        return '';
     }
 
     /**

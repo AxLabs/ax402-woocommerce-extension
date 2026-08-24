@@ -150,7 +150,7 @@ npm run test:e2e-ucp
 # E2E_UCP_PHYSICAL=1 npm run test:e2e-ucp
 ```
 
-Flow: discover → catalog search → create cart → create checkout from `cart_id` → MCP `complete_checkout` (structured `payment_required`) → buyer signs → MCP retry with `_meta["x402/payment"]` → GET session `completed` → GET order. Set `E2E_UCP_TRANSPORT=rest` to pay via REST complete headers instead. Details: [ucp.md](ucp.md).
+Flow: discover → catalog search → create cart → create checkout from `cart_id` → MCP `complete_checkout` (PaymentRequired on `structuredContent`) → buyer signs → MCP retry with `_meta["x402/payment"]` → GET session `completed` → GET order. Set `E2E_UCP_TRANSPORT=rest` to pay via REST complete headers or JSON `payment.payment_signature`. Details: [ucp.md](ucp.md).
 
 Shopify `ucp` CLI smoke (discover → cart → checkout → complete **without** paying):
 

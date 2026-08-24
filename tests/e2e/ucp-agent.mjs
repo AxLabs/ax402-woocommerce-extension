@@ -345,6 +345,7 @@ async function main() {
     });
     const structured = challenge.body?.result?.structuredContent;
     const paymentRequired = structured?.payment_required
+      || (Array.isArray(structured?.accepts) ? structured : null)
       || challenge.body?.result?._meta?.['x402/payment-required'];
     if (!paymentRequired) {
       throw new Error(`MCP complete missing payment_required: ${JSON.stringify(challenge.body)}`);

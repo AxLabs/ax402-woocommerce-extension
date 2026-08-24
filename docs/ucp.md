@@ -28,11 +28,7 @@ Enable it in **WooCommerce → Settings → Payments → Ax402 → UCP for agent
 | `org.x402.payment` handler fields | [ucp-x402-binding](https://github.com/AxLabs/ucp-x402-binding) `schema/handler.schema.json` |
 | HTTP 402 at `POST …/complete` | Binding `docs/02-wire-binding.md` |
 
-The binding repo’s `examples/discovery.json` is **stale** vs official UCP. Do not copy:
-
-- `services` as a URL string array
-- `map_order` as a URL (official `map_order` is an optional key-order hint object; this plugin **omits** it)
-- `payment_handlers["org.x402.payment"]` as a single object (official value is an **array**)
+The binding `examples/discovery.json` now follows official UCP **2026-04-08** (maps of arrays, dated capability versions, REST+MCP). This plugin matches that shape. Still omit `map_order` (optional key-order hint). Do not copy older drafts that used a URL-list `services` or a single handler object.
 
 ---
 
@@ -78,11 +74,11 @@ Rules:
 
 - **UCP JSON** (discovery, catalog, session bodies, REST 402 **JSON body**) never contains gateway hosts, API ids, endpoint ids, fulfill tokens, or `payment_url`.
 - The **PAYMENT-REQUIRED header** still contains the Ax402 gateway URL inside x402 `resource`. That is the only leak on the REST challenge, and it is required for Ax402 verification.
-- **MCP** copies that same `PaymentRequired` object into the tool result (`structuredContent.payment_required` and `result._meta["x402/payment-required"]`) because JSON-RPC clients typically cannot read HTTP headers. That is the same leak as the header, in JSON, and only on MCP complete.
+- **MCP** copies that same `PaymentRequired` object into the tool result: x402-standard `structuredContent` (x402Version / resource / accepts at the top of the object), nested `structuredContent.payment_required` for UCP session clients, and a MAY mirror at `result._meta["x402/payment-required"]`. JSON-RPC stays HTTP 200. That is the same leak as the header, in JSON, and only on MCP complete.
 - If the gateway’s **PAYMENT-RESPONSE** includes a gateway `resourceUrl`, the plugin **redacts** those URLs inside the UCP JSON `x402_receipt` field. The `PAYMENT-RESPONSE` header is forwarded unchanged.
 - UCP agents **must retry shop `complete`**, not `resource.url`.
 - A generic SDK that POSTs to `resource.url` hits the gateway directly. The order can still fulfill via the existing gateway → Woo path; `GET` the session afterwards. That is accidental compatibility, not the intended agent path.
-- Hedera `PAYMENT-SIGNATURE` JWTs are often larger than Apache/ngrok header limits (`LimitRequestFieldSize`, ngrok `ERR_NGROK_*` header-too-large). WordPress cannot raise those. Put the payload in the complete **JSON body** / MCP `_meta["x402/payment"]` (this plugin already accepts that). REST header retry only works when every hop allows an 8KB+ header.
+- Hedera `PAYMENT-SIGNATURE` JWTs are often larger than Apache/ngrok header limits (`LimitRequestFieldSize`, ngrok `ERR_NGROK_*` header-too-large). WordPress cannot raise those. REST **JSON body** `payment.payment_signature` / `payment.payment_signature_data` is first-class (preferred over the header when both are present). MCP retry uses `params._meta["x402/payment"]` or the same body fields. Header retry only works when every hop allows an 8KB+ header.
 
 Strict hide (`resource` = shop complete URL) is deferred until Ax402 can verify shop-bound payments.
 
@@ -98,7 +94,7 @@ The same-origin **pay-proxy** used by the human pay page is unchanged. UCP compl
 2. REST: `POST {endpoint}/catalog/search` with `{ "query": "micropay" }` (default page size 10). MCP: `search_catalog` with `{ catalog: { query } }`.
 3. Optional cart: `POST {endpoint}/carts` with `line_items`, then `POST {endpoint}/checkout-sessions` with `{ "cart_id": "<cart id>" }` (same Woo order; overlapping checkout fields are ignored). Or skip the cart and `POST /checkout-sessions` with `line_items` directly. `id` is the Woo product id (string), variation id, or SKU.
 4. If the SKU needs shipping: `PUT` the **checkout** session with `fulfillment.methods[]` destinations (`type: shipping`), or select a `pickup` location if the shop offers WooCommerce Local pickup. Then set `groups[].selected_option_id` from the returned rates. Woo tax/shipping land on the order. Virtual/downloadable SKUs omit checkout `fulfillment` (UCP checkout methods are only `shipping` | `pickup`).
-5. When `status` is `ready_for_complete`, the session includes an `info` `payment_required` message plus `links[]` type `org.x402.complete` (REST POST URL). `ucp checkout complete` / MCP `complete_checkout` **without** an x402 signature does **not** place the order: REST returns HTTP 402 + `PAYMENT-REQUIRED`; MCP stays HTTP 200 with structured `payment_required`. Pay that REST complete URL with **any** x402 wallet (`PAYMENT-SIGNATURE` retry), or retry MCP `complete_checkout` with `params._meta["x402/payment"]`. Do not POST the MCP JSON-RPC URL as the x402 resource. Then GET the checkout and GET the order. Binding: https://github.com/AxLabs/ucp-x402-binding
+5. When `status` is `ready_for_complete`, the session includes an `info` `payment_required` message plus `links[]` type `org.x402.complete` (REST POST URL). `ucp checkout complete` / MCP `complete_checkout` **without** an x402 signature does **not** place the order: REST returns HTTP 402 + `PAYMENT-REQUIRED`; MCP stays HTTP 200 with `structuredContent` as a PaymentRequired (and nested `payment_required`). Pay that REST complete URL with **any** x402 wallet (`PAYMENT-SIGNATURE` or JSON `payment.payment_signature`), or retry MCP `complete_checkout` with `params._meta["x402/payment"]`. Do not POST the MCP JSON-RPC URL as the x402 resource. Then GET the checkout and GET the order. Binding: https://github.com/AxLabs/ucp-x402-binding
 6. Sign the challenge (including gateway `resource` inside the x402 payload).
 7. Retry the same complete hop with the signature (REST header or MCP `_meta`).
 8. `200` session `status: completed` with `order.id` (Woo order id) and `order.permalink_url`. MCP also puts the decoded receipt on `result._meta["x402/payment-response"]`.
@@ -120,7 +116,7 @@ Order-level tax/shipping remainders beyond 2 decimals are **ceiled** to the next
 
 The complete request polls fulfill/reconcile for up to ~10 seconds inside that HTTP call. Agents do not observe `complete_in_progress` on the wire; they get `402` or `completed` (or a recoverable error).
 
-Status machine (UCP enums only): `incomplete` → `ready_for_complete` → (402 stays ready) → `completed` / `canceled`. Gateway reject returns a recoverable `payment_failed` and stays `ready_for_complete`. We do not mark `payment_failed` as a terminal UCP status while a settlement might still land.
+Status machine (UCP 2026-04-08 enums): `incomplete` → `ready_for_complete` → (402 stays ready) → `completed` / `canceled`. If a destination is set but Woo has no shipping rates, status is `requires_escalation` (not a message code) and `continue_url` is the human checkout URL. Gateway reject returns a recoverable `payment_failed` and stays `ready_for_complete`. We do not mark `payment_failed` as a terminal UCP status while a settlement might still land. Non-terminal sessions include `continue_url` (MUST for `requires_escalation`). `complete_in_progress` is not observed on the wire (verify+settle runs inside complete).
 
 Non-1:1 settlement tokens persist `rateDate` / `rateSource` / `capturedAt` on order settlement-option meta (additive; the human pay page ignores unknown keys). `GET` session includes a UCP `quote` object when a non-1:1 option exists.
 
@@ -194,7 +190,7 @@ Uninstall still deletes `ax402_wc_settings` (covers the new keys). The profile i
 | `Ax402_WC_Ucp_Complete` | 402 relay + signature proxy + poll |
 | `Ax402_WC_Ucp_Gateway_Http` | Allowlisted gateway HTTP (UCP only) |
 | `Ax402_WC_Ucp_Mcp` | JSON-RPC MCP adapter (`initialize`, `tools/list`, `tools/call`, OpenRPC aliases) |
-| `Ax402_WC_Ucp_Mcp_Payment` | MCP x402 wire: `payment_required` in the tool result, `_meta["x402/payment"]` on retry |
+| `Ax402_WC_Ucp_Mcp_Payment` | MCP x402 wire: PaymentRequired on `structuredContent` (+ nested `payment_required`), `_meta["x402/payment"]` on retry |
 | `Ax402_WC_Ucp_Leak` | Facilitator-string scanner for tests |
 
 Human-flow classes (`class-pay-page.php`, Blocks, `class-gateway-proxy-controller.php`, legacy `class-agent-rest-controller.php`) are not rewritten. The only shared-pipeline change is **additive** FX metadata on settlement options.

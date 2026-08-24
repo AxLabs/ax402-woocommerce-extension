@@ -110,9 +110,33 @@ final class UcpMcpPaymentTest extends TestCase
         );
         $this->assertFalse($payload['isError']);
         $this->assertSame(2, $payload['structuredContent']['payment_required']['x402Version']);
+        $this->assertSame(2, $payload['structuredContent']['x402Version']);
         $this->assertSame(2, $payload['_meta']['x402/payment-required']['x402Version']);
         $decoded = json_decode($payload['content'][0]['text'], true);
         $this->assertSame(2, $decoded['payment_required']['x402Version']);
+        $this->assertSame(2, $decoded['x402Version']);
+    }
+
+    public function test_tool_result_overlays_resource_and_accepts(): void
+    {
+        $required = [
+            'x402Version' => 2,
+            'resource' => ['url' => 'https://gateway.example/pay'],
+            'accepts' => [['network' => 'eip155:8453']],
+        ];
+        $payload = Ax402_WC_Ucp_Mcp::tool_result_payload(
+            [
+                'id' => 'wc_order_1',
+                'status' => 'ready_for_complete',
+                'payment_required' => $required,
+            ],
+            402,
+            ['x402/payment-required' => $required]
+        );
+        $this->assertSame($required['resource'], $payload['structuredContent']['resource']);
+        $this->assertSame($required['accepts'], $payload['structuredContent']['accepts']);
+        $this->assertSame('wc_order_1', $payload['structuredContent']['id']);
+        $this->assertSame('ready_for_complete', $payload['structuredContent']['status']);
     }
 
     public function test_tool_result_marks_other_http_errors(): void

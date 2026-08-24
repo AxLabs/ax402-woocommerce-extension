@@ -263,7 +263,7 @@ final class Ax402_WC_Ucp_Mcp
                 $by_id,
             ],
             'complete_checkout' => [
-                'Place the order after x402 payment. Without a signature this returns payment_required and does not settle. Pay the shop REST complete URL in links[] type org.x402.complete (HTTP 402, then PAYMENT-SIGNATURE on that same shop URL). Do not POST payment_required.resource.url (Ax402 gateway, only inside the signed challenge) and do not POST the MCP JSON-RPC URL. Or retry this tool with params._meta["x402/payment"]. payment_required.accepts is only the selected/default token; GET checkout payment.instruments[] for every prepared asset and retry complete (or update_checkout first) with payment.instruments[{network,asset,selected:true}] to quote another token (e.g. XGAS). Pay that new challenge as-is; do not filter a different network/asset against it. Then get_checkout / get_order. Spec: https://github.com/AxLabs/ucp-x402-binding',
+                'Place the order after x402 payment. Without a signature this returns a PaymentRequired challenge in structuredContent (x402Version, resource, accepts; also nested as payment_required) and does not settle. Pay the shop REST complete URL in links[] type org.x402.complete (HTTP 402, then PAYMENT-SIGNATURE or JSON body payment.payment_signature on that same shop URL). Do not POST payment_required.resource.url (Ax402 gateway, only inside the signed challenge) and do not POST the MCP JSON-RPC URL. Or retry this tool with params._meta["x402/payment"] or checkout.payment.payment_signature. payment_required.accepts is only the selected/default token; GET checkout payment.instruments[] for every prepared asset and retry complete (or update_checkout first) with payment.instruments[{network,asset,selected:true}] to quote another token (e.g. XGAS). Pay that new challenge as-is; do not filter a different network/asset against it. Then get_checkout / get_order. Spec: https://github.com/AxLabs/ucp-x402-binding',
                 $by_id,
             ],
             'cancel_checkout' => ['Cancel a checkout session.', $by_id],
@@ -509,7 +509,7 @@ final class Ax402_WC_Ucp_Mcp
     private static function is_unwrapped_shopping_body(array $body, string $nested): bool
     {
         $keys = match ($nested) {
-            'cart', 'checkout' => ['line_items', 'cart_id', 'fulfillment', 'buyer', 'context'],
+            'cart', 'checkout' => ['line_items', 'cart_id', 'fulfillment', 'buyer', 'context', 'payment'],
             'catalog' => ['query', 'ids', 'id', 'filters', 'pagination'],
             default => [],
         };
@@ -623,11 +623,12 @@ final class Ax402_WC_Ucp_Mcp
      */
     public static function tool_result_payload(array $data, int $http, array $meta = []): array
     {
+        $structured = self::structured_content_with_payment_required($data, $meta);
         $payload = [
-            'structuredContent' => $data,
+            'structuredContent' => $structured,
             'content' => [[
                 'type' => 'text',
-                'text' => (string) wp_json_encode($data),
+                'text' => (string) wp_json_encode($structured),
             ]],
             'isError' => $http >= 400 && $http !== 402,
         ];
@@ -636,6 +637,39 @@ final class Ax402_WC_Ucp_Mcp
         }
 
         return $payload;
+    }
+
+    /**
+     * x402 MCP requires structuredContent to be a PaymentRequired object.
+     * Overlay x402Version/resource/accepts onto the UCP session so both
+     * x402 wallets and UCP session clients can read the same payload.
+     *
+     * @param array<string, mixed> $data
+     * @param array<string, mixed> $meta
+     * @return array<string, mixed>
+     */
+    private static function structured_content_with_payment_required(array $data, array $meta): array
+    {
+        $required = [];
+        if (isset($data['payment_required']) && is_array($data['payment_required'])) {
+            $required = $data['payment_required'];
+        } elseif (
+            isset($meta[Ax402_WC_Ucp_Mcp_Payment::META_PAYMENT_REQUIRED])
+            && is_array($meta[Ax402_WC_Ucp_Mcp_Payment::META_PAYMENT_REQUIRED])
+        ) {
+            $required = $meta[Ax402_WC_Ucp_Mcp_Payment::META_PAYMENT_REQUIRED];
+            $data['payment_required'] = $required;
+        }
+        if ($required === []) {
+            return $data;
+        }
+        foreach (['x402Version', 'resource', 'accepts', 'error'] as $key) {
+            if (array_key_exists($key, $required) && !array_key_exists($key, $data)) {
+                $data[$key] = $required[$key];
+            }
+        }
+
+        return $data;
     }
 
     /**
