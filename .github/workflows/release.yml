@@ -10,15 +10,9 @@ permissions:
 
 jobs:
   release:
-    runs-on: self-hosted
+    # GitHub-hosted: `gh` is preinstalled. v0.1.0 failed on self-hosted (`gh: command not found`).
+    runs-on: ubuntu-latest
     steps:
-      - name: Reclaim workspace ownership
-        run: |
-          ws="${GITHUB_WORKSPACE:-.}"
-          if [ -e "$ws" ]; then
-            sudo chown -R "$(id -u):$(id -g)" "$ws" || true
-          fi
-
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
@@ -63,7 +57,6 @@ jobs:
             if [[ -f plugin/readme.txt ]]; then
               echo "### Changelog (from readme.txt)"
               echo
-              # Emit the section for this Stable tag when present; otherwise last changelog block.
               awk -v ver="$VERSION" '
                 BEGIN { show=0 }
                 /^== Changelog ==/ { in_cl=1; next }
@@ -78,7 +71,12 @@ jobs:
             echo "See [RELEASE.md](https://github.com/${{ github.repository }}/blob/main/RELEASE.md) for versioning and release process."
           } > "$NOTES"
 
-          gh release create "$TAG" "$ZIP" \
-            --title "$TAG" \
-            --notes-file "$NOTES" \
-            --verify-tag
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$ZIP" --clobber
+            gh release edit "$TAG" --notes-file "$NOTES" --title "$TAG"
+          else
+            gh release create "$TAG" "$ZIP" \
+              --title "$TAG" \
+              --notes-file "$NOTES" \
+              --verify-tag
+          fi

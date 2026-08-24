@@ -91,12 +91,11 @@ Tag name **must** be `v` + the SemVer in the version sources (`v0.2.0`).
 
 Workflow: [`.github/workflows/release.yml`](.github/workflows/release.yml)
 
-On `push` of tags `v*.*.*` it will:
+On `push` of tags `v*.*.*` (GitHub-hosted Ubuntu, so `gh` is available) it will:
 
-1. Reclaim self-hosted workspace ownership (same as CI)
-2. `bash bin/check-version.sh <tag>`
-3. Install deps, `npm run package`
-4. `gh release create` with `dist/ax402-for-woocommerce-<version>.zip` attached
+1. `bash bin/check-version.sh <tag>`
+2. Install deps, `npm run package`
+3. `gh release create` (or upload/edit if the release already exists) with `dist/ax402-for-woocommerce-<version>.zip` attached
 
 Inspect: **GitHub → Releases** (or `gh release view v0.2.0`).
 
