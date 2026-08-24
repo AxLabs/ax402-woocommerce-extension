@@ -171,10 +171,21 @@ final class Ax402_WC_Ucp_Mcp
                 'idempotency-key' => ['type' => 'string'],
             ],
         ];
-        $object = [
+        $catalog_body = [
             'type' => 'object',
             'additionalProperties' => true,
+            'properties' => [
+                'query' => ['type' => 'string', 'description' => 'Free-text catalog search.'],
+                'ids' => [
+                    'type' => 'array',
+                    'items' => ['type' => 'string'],
+                    'description' => 'Product / variant ids for lookup.',
+                ],
+                'id' => ['type' => 'string', 'description' => 'Single product or variant id for get_product.'],
+            ],
         ];
+        $cart_body = self::cart_input_schema();
+        $checkout_body = self::checkout_input_schema();
 
         $catalog = [
             'type' => 'object',
@@ -182,7 +193,7 @@ final class Ax402_WC_Ucp_Mcp
             'additionalProperties' => true,
             'properties' => [
                 'meta' => $meta,
-                'catalog' => $object,
+                'catalog' => $catalog_body,
             ],
         ];
         $checkout_create = [
@@ -191,7 +202,7 @@ final class Ax402_WC_Ucp_Mcp
             'additionalProperties' => true,
             'properties' => [
                 'meta' => $meta,
-                'checkout' => $object,
+                'checkout' => $checkout_body,
             ],
         ];
         $by_id = [
@@ -200,8 +211,8 @@ final class Ax402_WC_Ucp_Mcp
             'additionalProperties' => true,
             'properties' => [
                 'meta' => $meta,
-                'id' => ['type' => 'string'],
-                'checkout' => $object,
+                'id' => ['type' => 'string', 'description' => 'Checkout session id (Woo order_key). CLI: positional, not in --input.'],
+                'checkout' => $checkout_body,
             ],
         ];
 
@@ -211,7 +222,7 @@ final class Ax402_WC_Ucp_Mcp
             'additionalProperties' => true,
             'properties' => [
                 'meta' => $meta,
-                'cart' => $object,
+                'cart' => $cart_body,
             ],
         ];
         $cart_by_id = [
@@ -220,8 +231,8 @@ final class Ax402_WC_Ucp_Mcp
             'additionalProperties' => true,
             'properties' => [
                 'meta' => $meta,
-                'id' => ['type' => 'string'],
-                'cart' => $object,
+                'id' => ['type' => 'string', 'description' => 'Cart id (Woo order_key). CLI: positional, not in --input.'],
+                'cart' => $cart_body,
             ],
         ];
         $order_by_id = [
@@ -242,11 +253,17 @@ final class Ax402_WC_Ucp_Mcp
             'get_cart' => ['Get a cart session.', $cart_by_id],
             'update_cart' => ['Update a cart session.', $cart_by_id],
             'cancel_cart' => ['Cancel a cart session.', $cart_by_id],
-            'create_checkout' => ['Create a checkout session.', $checkout_create],
-            'get_checkout' => ['Get a checkout session.', $by_id],
-            'update_checkout' => ['Update a checkout session.', $by_id],
+            'create_checkout' => [
+                'Create a checkout session. Prefer cart_id from create_cart (line_items may be []). For shipping SKUs, follow with update_checkout and fulfillment destinations.',
+                $checkout_create,
+            ],
+            'get_checkout' => ['Get a checkout session. CLI: ucp checkout get <id>.', $by_id],
+            'update_checkout' => [
+                'Update checkout (full replace of sent fields). Shipping destinations use UCP postal fields: street_address, address_locality, address_region, postal_code, address_country (ISO 3166-1 alpha-2). Example: {"line_items":[{"id":"<line_id>","item":{"id":"<item_id>"},"quantity":1}],"fulfillment":{"methods":[{"type":"shipping","destinations":[{"street_address":"Mystrasse 111","address_locality":"Zurich","postal_code":"8003","address_country":"CH"}]}]}}. Then set groups[].selected_option_id from returned rates. payment.instruments[] with selected:true persists that settlement token for the next complete (each token is its own x402 resource; payment_required.accepts will not list the others). CLI: ucp checkout update <id> --input \'{...}\' (id is positional).',
+                $by_id,
+            ],
             'complete_checkout' => [
-                'Place the order after x402 payment. Without a signature this returns payment_required and does not settle. Pay by POST {shop}/wp-json/ucp/v1/checkout-sessions/{id}/complete with any x402 wallet (HTTP 402, then PAYMENT-SIGNATURE on the same URL), or retry this tool with params._meta["x402/payment"] after signing structuredContent.payment_required. Do not POST the MCP JSON-RPC URL as the x402 resource. Then get_checkout / get_order. Spec: https://github.com/AxLabs/ucp-x402-binding',
+                'Place the order after x402 payment. Without a signature this returns payment_required and does not settle. Pay the shop REST complete URL in links[] type org.x402.complete (HTTP 402, then PAYMENT-SIGNATURE on that same shop URL). Do not POST payment_required.resource.url (Ax402 gateway, only inside the signed challenge) and do not POST the MCP JSON-RPC URL. Or retry this tool with params._meta["x402/payment"]. payment_required.accepts is only the selected/default token; GET checkout payment.instruments[] for every prepared asset and retry complete (or update_checkout first) with payment.instruments[{network,asset,selected:true}] to quote another token (e.g. XGAS). Pay that new challenge as-is; do not filter a different network/asset against it. Then get_checkout / get_order. Spec: https://github.com/AxLabs/ucp-x402-binding',
                 $by_id,
             ],
             'cancel_checkout' => ['Cancel a checkout session.', $by_id],
@@ -263,6 +280,176 @@ final class Ax402_WC_Ucp_Mcp
         }
 
         return $tools;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private static function line_items_schema(): array
+    {
+        return [
+            'type' => 'array',
+            'description' => 'Request-shaped lines. On update, keep line_items[].id for existing rows; item.id is the catalog/variant id.',
+            'items' => [
+                'type' => 'object',
+                'additionalProperties' => true,
+                'properties' => [
+                    'id' => ['type' => 'string', 'description' => 'Existing line id from a prior cart/checkout response.'],
+                    'item' => [
+                        'type' => 'object',
+                        'additionalProperties' => true,
+                        'properties' => [
+                            'id' => ['type' => 'string', 'description' => 'Woo product id, variation id, or SKU.'],
+                        ],
+                    ],
+                    'quantity' => ['type' => 'integer', 'minimum' => 1],
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private static function cart_input_schema(): array
+    {
+        return [
+            'type' => 'object',
+            'additionalProperties' => true,
+            'description' => 'Cart body. Example: {"line_items":[{"item":{"id":"18"},"quantity":1}],"context":{"address_country":"CH"}}',
+            'properties' => [
+                'line_items' => self::line_items_schema(),
+                'buyer' => self::buyer_schema(),
+                'context' => [
+                    'type' => 'object',
+                    'additionalProperties' => true,
+                    'description' => 'Soft localization. Prefer address_country (ISO 3166-1 alpha-2), address_region, postal_code.',
+                    'properties' => [
+                        'address_country' => ['type' => 'string'],
+                        'address_region' => ['type' => 'string'],
+                        'postal_code' => ['type' => 'string'],
+                        'currency' => ['type' => 'string'],
+                    ],
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private static function checkout_input_schema(): array
+    {
+        $destination = [
+            'type' => 'object',
+            'additionalProperties' => true,
+            'description' => 'UCP 2026-04-08 postal address. Use street_address (not address_line_1) and address_country (not country).',
+            'properties' => [
+                'id' => ['type' => 'string'],
+                'street_address' => ['type' => 'string'],
+                'address_locality' => ['type' => 'string'],
+                'address_region' => ['type' => 'string'],
+                'postal_code' => ['type' => 'string'],
+                'address_country' => [
+                    'type' => 'string',
+                    'description' => 'ISO 3166-1 alpha-2, e.g. CH, US.',
+                ],
+            ],
+        ];
+
+        return [
+            'type' => 'object',
+            'additionalProperties' => true,
+            'description' => 'Checkout body. Create from cart with cart_id + line_items:[]. Shipping example destination uses street_address + address_country.',
+            'properties' => [
+                'cart_id' => ['type' => 'string', 'description' => 'Existing cart id; overlapping checkout lines are ignored.'],
+                'line_items' => self::line_items_schema(),
+                'buyer' => self::buyer_schema(),
+                'payment' => [
+                    'type' => 'object',
+                    'additionalProperties' => true,
+                    'description' => 'Select one prepared instrument (network + asset) on update or complete to receive that token\'s x402 challenge. The choice is stored on the session. Default is the first prepared token. GET checkout lists payment.instruments[] for this order.',
+                    'properties' => [
+                        'instruments' => [
+                            'type' => 'array',
+                            'items' => [
+                                'type' => 'object',
+                                'additionalProperties' => true,
+                                'properties' => [
+                                    'id' => ['type' => 'string'],
+                                    'handler_id' => ['type' => 'string'],
+                                    'type' => ['type' => 'string'],
+                                    'selected' => ['type' => 'boolean'],
+                                    'network' => [
+                                        'type' => 'string',
+                                        'description' => 'CAIP-2 network, e.g. eip155:8453 or eip155:47763.',
+                                    ],
+                                    'asset' => [
+                                        'type' => 'string',
+                                        'description' => 'Token contract (or native asset id).',
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+                'fulfillment' => [
+                    'type' => 'object',
+                    'additionalProperties' => true,
+                    'properties' => [
+                        'methods' => [
+                            'type' => 'array',
+                            'items' => [
+                                'type' => 'object',
+                                'additionalProperties' => true,
+                                'properties' => [
+                                    'type' => [
+                                        'type' => 'string',
+                                        'enum' => ['shipping', 'pickup'],
+                                    ],
+                                    'selected_destination_id' => ['type' => 'string'],
+                                    'destinations' => [
+                                        'type' => 'array',
+                                        'items' => $destination,
+                                    ],
+                                    'groups' => [
+                                        'type' => 'array',
+                                        'items' => [
+                                            'type' => 'object',
+                                            'additionalProperties' => true,
+                                            'properties' => [
+                                                'id' => ['type' => 'string'],
+                                                'selected_option_id' => [
+                                                    'type' => 'string',
+                                                    'description' => 'Shipping rate id from a prior checkout get/update.',
+                                                ],
+                                            ],
+                                        ],
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private static function buyer_schema(): array
+    {
+        return [
+            'type' => 'object',
+            'additionalProperties' => true,
+            'properties' => [
+                'email' => ['type' => 'string'],
+                'first_name' => ['type' => 'string'],
+                'last_name' => ['type' => 'string'],
+                'phone_number' => ['type' => 'string'],
+            ],
+        ];
     }
 
     /**

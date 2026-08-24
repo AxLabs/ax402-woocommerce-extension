@@ -153,7 +153,16 @@ final class Ax402_WC_Order_Payment
         $order->update_meta_data(self::META_NETWORK, (string) $primary['network']);
         $order->update_meta_data(self::META_PATH, (string) $primary['path']);
         $order->update_meta_data(self::META_SETTLEMENT_OPTIONS, wp_json_encode($display_options));
+        $previous = trim((string) $order->get_meta(self::META_SELECTED_TOKEN_ID));
         $order->delete_meta_data(self::META_SELECTED_TOKEN_ID);
+        if ($previous !== '') {
+            foreach ($display_options as $option) {
+                if (Ax402_WC_Ucp_Asset_Match::same_token_id((string) ($option['tokenId'] ?? ''), $previous)) {
+                    $order->update_meta_data(self::META_SELECTED_TOKEN_ID, (string) $option['tokenId']);
+                    break;
+                }
+            }
+        }
         $order->save();
 
         $symbols = implode(', ', array_map(
@@ -161,15 +170,40 @@ final class Ax402_WC_Order_Payment
             $display_options
         ));
 
-        $order->add_order_note(
-            sprintf(
-                /* translators: 1: USD amount 2: token symbols 3: endpoint count */
-                __('Ax402 payment prepared for %1$s USD (%2$s) across %3$d temporary endpoint(s).', 'ax402-for-woocommerce'),
-                $amount_usd,
-                $symbols,
-                count($display_options)
-            )
+        $omitted_symbols = [];
+        foreach ($token_ids as $token_id) {
+            $token_id = (string) $token_id;
+            $prepared = false;
+            foreach ($options as $option) {
+                if ((string) ($option['token_id'] ?? '') === $token_id) {
+                    $prepared = true;
+                    break;
+                }
+            }
+            if ($prepared) {
+                continue;
+            }
+            $token = Ax402_WC_Platform_Tokens::find_token_by_id($platform, $token_id);
+            $omitted_symbols[] = $token !== null
+                ? (string) ($token['symbol'] ?? $token_id)
+                : $token_id;
+        }
+
+        $note = sprintf(
+            /* translators: 1: USD amount 2: token symbols 3: endpoint count */
+            __('Ax402 payment prepared for %1$s USD (%2$s) across %3$d temporary endpoint(s).', 'ax402-for-woocommerce'),
+            $amount_usd,
+            $symbols,
+            count($display_options)
         );
+        if ($omitted_symbols !== []) {
+            $note .= ' ' . sprintf(
+                /* translators: %s: comma-separated token symbols */
+                __('Omitted (no USD rate): %s.', 'ax402-for-woocommerce'),
+                implode(', ', $omitted_symbols)
+            );
+        }
+        $order->add_order_note($note);
 
         return [
             'gateway_url' => (string) $primary['gatewayUrl'],
@@ -355,6 +389,43 @@ final class Ax402_WC_Order_Payment
             'endpoint_id' => $endpoint_id,
             'gateway_url' => $gateway_url,
         ];
+    }
+
+    /**
+     * Remember which settlement token the agent selected (no endpoint lock).
+     */
+    public static function remember_preferred_token(WC_Order $order, string $token_id): void
+    {
+        $token_id = trim($token_id);
+        if ($token_id === '') {
+            $order->delete_meta_data(self::META_SELECTED_TOKEN_ID);
+            $order->save();
+
+            return;
+        }
+
+        $order->update_meta_data(self::META_SELECTED_TOKEN_ID, $token_id);
+        $order->save();
+    }
+
+    /**
+     * @param list<array<string, mixed>>|null $options
+     * @return array<string, mixed>|null
+     */
+    public static function preferred_option_from_order(WC_Order $order, ?array $options = null): ?array
+    {
+        $options ??= self::settlement_options_from_order($order);
+        $stored = trim((string) $order->get_meta(self::META_SELECTED_TOKEN_ID));
+        if ($stored === '') {
+            return null;
+        }
+        foreach ($options as $option) {
+            if (Ax402_WC_Ucp_Asset_Match::same_token_id((string) ($option['tokenId'] ?? ''), $stored)) {
+                return $option;
+            }
+        }
+
+        return null;
     }
 
     /**

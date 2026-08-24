@@ -137,6 +137,25 @@ final class UcpMcpTest extends TestCase
         $this->assertSame('18', $body['line_items'][0]['item']['id']);
     }
 
+    public function test_update_checkout_schema_documents_postal_fields(): void
+    {
+        $tools = Ax402_WC_Ucp_Mcp::tool_descriptors();
+        $update = null;
+        foreach ($tools as $tool) {
+            if ($tool['name'] === 'update_checkout') {
+                $update = $tool;
+                break;
+            }
+        }
+        $this->assertIsArray($update);
+        $encoded = (string) json_encode($update);
+        $this->assertStringContainsString('street_address', $encoded);
+        $this->assertStringContainsString('address_country', $encoded);
+        $this->assertStringContainsString('fulfillment', $encoded);
+        $this->assertStringContainsString('positional', $update['description']);
+        $this->assertStringContainsString('payment.instruments', $update['description']);
+    }
+
     public function test_empty_line_items_rejected_before_order_writes(): void
     {
         $this->expectException(\InvalidArgumentException::class);

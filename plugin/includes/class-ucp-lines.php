@@ -90,9 +90,9 @@ final class Ax402_WC_Ucp_Lines
      */
     public static function apply_context(WC_Order $order, array $context): void
     {
-        $country = strtoupper(trim((string) ($context['address_country'] ?? '')));
-        $region = trim((string) ($context['address_region'] ?? ''));
-        $postcode = trim((string) ($context['postal_code'] ?? ''));
+        $country = strtoupper(trim((string) ($context['address_country'] ?? $context['country'] ?? '')));
+        $region = trim((string) ($context['address_region'] ?? $context['region'] ?? $context['state'] ?? ''));
+        $postcode = trim((string) ($context['postal_code'] ?? $context['postcode'] ?? $context['zip'] ?? ''));
         if ($country === '' && $region === '' && $postcode === '') {
             return;
         }

@@ -82,6 +82,7 @@ Rules:
 - If the gateway’s **PAYMENT-RESPONSE** includes a gateway `resourceUrl`, the plugin **redacts** those URLs inside the UCP JSON `x402_receipt` field. The `PAYMENT-RESPONSE` header is forwarded unchanged.
 - UCP agents **must retry shop `complete`**, not `resource.url`.
 - A generic SDK that POSTs to `resource.url` hits the gateway directly. The order can still fulfill via the existing gateway → Woo path; `GET` the session afterwards. That is accidental compatibility, not the intended agent path.
+- Hedera `PAYMENT-SIGNATURE` JWTs are often larger than Apache/ngrok header limits (`LimitRequestFieldSize`, ngrok `ERR_NGROK_*` header-too-large). WordPress cannot raise those. Put the payload in the complete **JSON body** / MCP `_meta["x402/payment"]` (this plugin already accepts that). REST header retry only works when every hop allows an 8KB+ header.
 
 Strict hide (`resource` = shop complete URL) is deferred until Ax402 can verify shop-bound payments.
 
@@ -132,7 +133,14 @@ MCP tools: catalog (`search_catalog`, `lookup_catalog`, `get_product`), cart (`c
 Shopify’s CLI negotiates **MCP only**. Two wire details that break agents if ignored:
 
 1. **`--input` is wrapped** under `cart` / `checkout` / `catalog`. Pass **flat** fields (`line_items`, `fulfillment`, `query`). Example: `ucp cart create --input '{"line_items":[{"item":{"id":"18"},"quantity":1}]}'`. Nested `{ "cart": { "line_items": … } }` is also accepted (including a CLI double-wrap).
-2. **`ucp checkout complete` without an x402 signature does not settle.** Pay the REST complete URL (`links[]` type `org.x402.complete`, or `POST {shop}/wp-json/ucp/v1/checkout-sessions/{id}/complete`) with **any** x402 wallet (HTTP 402, then `PAYMENT-SIGNATURE` on that same URL). Or retry MCP `complete_checkout` with `params._meta["x402/payment"]`. Do **not** POST `/wp-json/ucp/v1/mcp` as the x402 resource. Then `ucp checkout get` / `ucp order get`. Binding: https://github.com/AxLabs/ucp-x402-binding
+2. **Resource ids are positional** on get/update/complete (`ucp checkout update <id> --input '…'`). Create ops take no id. That is CLI shape, not this plugin.
+3. **Postal fields are UCP 2026-04-08 names:** `street_address`, `address_locality`, `address_region`, `postal_code`, `address_country`. `ucp checkout update --input-schema` now lists those. Common aliases (`address_line_1`, `city`, `country`, …) are accepted so a mistyped payload is not silently dropped.
+4. **`ucp checkout complete` without an x402 signature does not settle.** Pay the **shop** REST complete URL (`links[]` type `org.x402.complete`). That is the x402 resource the wallet should POST. `payment_required.resource.url` is the Ax402 gateway URL **inside** the signed challenge (min-leak adapter) — do not treat it as the UCP complete URL, and do not POST `/wp-json/ucp/v1/mcp`. Then `ucp checkout get` / `ucp order get`. Binding: https://github.com/AxLabs/ucp-x402-binding
+5. **Discovery `x402.assets` is merchant capability, not this order’s quote.** Each enabled settlement token gets its **own** Ax402 endpoint (one `accept`). Complete without an instrument preference 402s the **first** prepared token, or the token stored from `checkout update` / a prior complete. `payment_required.accepts` is **that resource only** — other networks (e.g. XGAS on `eip155:47763`) will not appear there, even though `GET` checkout `payment.instruments[]` lists every prepared token. To quote another instrument, `PUT`/`update` or retry complete with that instrument `selected` (network + asset), then pay **the new** challenge as-is. Filtering a wallet pay to a network/asset that is not in that challenge’s `accepts[]` will fail (`no accept matched filters`). Tokens with no USD rate are omitted from the quote (order note: “Omitted (no USD rate)”). Do not merge every asset into one `payment_required` — that would bind the wrong x402 resource.
+
+WooCommerce has no first-class gift checkout; this plugin does not advertise `is_gift`. Put a gift note in the buyer name / merchant-hosted continue URL if you need one.
+
+CLI smoke (no wallet): `npm run test:e2e-ucp-cli` with `WP_BASE_URL` https and `ucp` on PATH. Skips if the CLI is missing.
 
 ---
 

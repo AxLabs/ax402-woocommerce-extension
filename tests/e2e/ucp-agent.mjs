@@ -293,12 +293,14 @@ async function main() {
   }
 
   const completeUrl = `${endpoint}/checkout-sessions/${sessionId}/complete`;
-  const x402Instrument = {
-    id: 'instr_x402_1',
-    handler_id: 'org.x402.payment',
-    type: 'x402',
-    selected: true,
-  };
+  const offered = Array.isArray(session.payment?.instruments) ? session.payment.instruments : [];
+  const x402Instrument = offered.find((row) => row && row.selected)
+    || offered[0]
+    || {
+      handler_id: 'org.x402.payment',
+      type: 'x402',
+      selected: true,
+    };
 
   if (transport === 'rest') {
     const challenge = await jsonFetch(completeUrl, { method: 'POST', body: '{}' });

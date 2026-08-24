@@ -85,9 +85,22 @@ final class Ax402_WC_Ucp_Complete
             );
         }
 
-        $instrument = $this->selected_instrument($body);
+        $instrument = Ax402_WC_Ucp_Asset_Match::preferred_instrument(
+            is_array($body['payment']['instruments'] ?? null) ? $body['payment']['instruments'] : []
+        );
+        $preference_given = Ax402_WC_Ucp_Asset_Match::has_preference($instrument);
+        if (!$preference_given) {
+            $stored = Ax402_WC_Order_Payment::preferred_option_from_order($order, $options);
+            if ($stored !== null) {
+                $instrument = [
+                    'id' => (string) ($stored['tokenId'] ?? ''),
+                    'network' => (string) ($stored['network'] ?? ''),
+                    'asset' => (string) ($stored['asset'] ?? ''),
+                ];
+                $preference_given = true;
+            }
+        }
         $matched = Ax402_WC_Ucp_Asset_Match::match($options, $instrument);
-        $preference_given = $this->has_asset_preference($instrument);
         if ($preference_given && $matched === null) {
             $pairs = Ax402_WC_Ucp_Asset_Match::available_pairs($options);
             return Ax402_WC_Ucp_Response::rest_error(
@@ -101,6 +114,10 @@ final class Ax402_WC_Ucp_Complete
             );
         }
         $matched ??= $options[0];
+        Ax402_WC_Order_Payment::remember_preferred_token(
+            $order,
+            (string) ($matched['tokenId'] ?? '')
+        );
 
         $signature = $this->http->header_from_request($request, 'payment-signature');
         if ($signature === '') {
@@ -111,16 +128,17 @@ final class Ax402_WC_Ucp_Complete
         }
 
         if ($signature === '') {
-            return $this->challenge($order, $matched);
+            return $this->challenge($order, $matched, $options);
         }
 
         return $this->submit_payment($order, $matched, $request, $signature, $body);
     }
 
     /**
-     * @param array<string, mixed> $option
+     * @param array<string, mixed> $option selected (or default) settlement option
+     * @param list<array<string, mixed>> $options all prepared settlement options
      */
-    private function challenge(WC_Order $order, array $option): WP_REST_Response
+    private function challenge(WC_Order $order, array $option, array $options = []): WP_REST_Response
     {
         $url = (string) ($option['gatewayUrl'] ?? '');
         if (!$this->assert_url($order, $url)) {
@@ -148,7 +166,7 @@ final class Ax402_WC_Ucp_Complete
             }
         }
 
-        $response = new WP_REST_Response([
+        $body = [
             'ucp' => Ax402_WC_Ucp_Response::ucp('dev.ucp.shopping.checkout', [
                 'status' => 'error',
                 'payment_handlers' => Ax402_WC_Ucp_Response::session_payment_handlers(),
@@ -159,7 +177,19 @@ final class Ax402_WC_Ucp_Complete
                 Ax402_WC_Ucp_Response::payment_required_message($order->get_order_key()),
             ],
             'links' => [Ax402_WC_Ucp_Response::payment_complete_link($order->get_order_key())],
-        ], $upstream['status'] === 402 ? 402 : max($upstream['status'], 402));
+        ];
+        $instruments = Ax402_WC_Ucp_Asset_Match::checkout_instruments(
+            $options !== [] ? $options : [$option],
+            $option
+        );
+        if ($instruments !== []) {
+            $body['payment'] = ['instruments' => $instruments];
+        }
+
+        $response = new WP_REST_Response(
+            $body,
+            $upstream['status'] === 402 ? 402 : max($upstream['status'], 402)
+        );
 
         if ($required !== '') {
             $response->header('PAYMENT-REQUIRED', $required);
@@ -324,39 +354,6 @@ final class Ax402_WC_Ucp_Complete
             ],
             Ax402_WC_Ucp_Gateway_Http::allowed_paths_for_order($order)
         );
-    }
-
-    /**
-     * @param array<string, mixed> $body
-     * @return array<string, mixed>
-     */
-    private function selected_instrument(array $body): array
-    {
-        $payment = is_array($body['payment'] ?? null) ? $body['payment'] : [];
-        $instruments = $payment['instruments'] ?? [];
-        if (!is_array($instruments)) {
-            return [];
-        }
-        foreach ($instruments as $row) {
-            if (!is_array($row)) {
-                continue;
-            }
-            if (!empty($row['selected'])) {
-                return $row;
-            }
-        }
-
-        return is_array($instruments[0] ?? null) ? $instruments[0] : [];
-    }
-
-    /**
-     * @param array<string, mixed> $instrument
-     */
-    private function has_asset_preference(array $instrument): bool
-    {
-        return trim((string) ($instrument['network'] ?? '')) !== ''
-            || trim((string) ($instrument['asset'] ?? '')) !== ''
-            || trim((string) ($instrument['token_id'] ?? $instrument['tokenId'] ?? '')) !== '';
     }
 
     /**

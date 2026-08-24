@@ -56,7 +56,12 @@ final class Ax402_WC_Ucp_Response
         $url = self::checkout_complete_url($session_id);
         $content = 'Payment required (org.x402.payment). This checkout is ready; complete without an x402 signature does not place the order. '
             . 'Pay by HTTP POST ' . $url . ' using any x402 wallet (expect HTTP 402 / PAYMENT-REQUIRED, then retry that same URL with PAYMENT-SIGNATURE). '
-            . 'On MCP, retry complete_checkout with params._meta["x402/payment"] after signing structuredContent.payment_required; do not treat the MCP JSON-RPC URL as the x402 resource. '
+            . 'On MCP, retry complete_checkout with params._meta["x402/payment"] after signing structuredContent.payment_required. '
+            . 'Pay that shop complete URL (also links[] type org.x402.complete), not payment_required.resource.url (Ax402 gateway resource inside the signed challenge) and not the MCP JSON-RPC URL. '
+            . 'payment_required.accepts is only the selected (or default) settlement token; each token is a separate x402 resource. '
+            . 'See payment.instruments[] for every prepared network/asset. To quote another token, PUT/update checkout or retry complete with that instrument selected (network + asset), then pay the new challenge. '
+            . 'Do not pay this challenge with a network or asset that is absent from payment_required.accepts. '
+            . 'Discovery x402.assets is merchant capability, not this order\'s quote. '
             . 'After settlement, GET this checkout and GET the order. '
             . 'Binding: ' . self::HANDLER_SPEC;
 

@@ -62,12 +62,16 @@ final class Ax402_WC_Ucp_Checkout
             $order->update_status('pending', __('UCP checkout session awaiting Ax402 payment.', 'ax402-for-woocommerce'));
 
             $this->maybe_prepare($order);
+            $this->apply_payment_preference($order, $body);
             $order->save();
         } catch (InvalidArgumentException $e) {
             $order->delete(true);
+            $code = str_contains($e->getMessage(), 'not available')
+                ? 'payment_method_not_available'
+                : 'invalid';
             return Ax402_WC_Ucp_Response::rest_error(
                 200,
-                [Ax402_WC_Ucp_Response::message('error', 'invalid', $e->getMessage(), 'unrecoverable')]
+                [Ax402_WC_Ucp_Response::message('error', $code, $e->getMessage(), $code === 'invalid' ? 'unrecoverable' : 'recoverable')]
             );
         } catch (Throwable $e) {
             $order->delete(true);
@@ -142,11 +146,15 @@ final class Ax402_WC_Ucp_Checkout
             Ax402_WC_Ucp_Fulfillment::sync_shipping($order);
             $order->calculate_totals();
             $this->maybe_prepare($order);
+            $this->apply_payment_preference($order, $body);
             $order->save();
         } catch (InvalidArgumentException $e) {
+            $code = str_contains($e->getMessage(), 'not available')
+                ? 'payment_method_not_available'
+                : 'invalid';
             return Ax402_WC_Ucp_Response::rest_error(
                 200,
-                [Ax402_WC_Ucp_Response::message('error', 'invalid', $e->getMessage(), 'recoverable')]
+                [Ax402_WC_Ucp_Response::message('error', $code, $e->getMessage(), 'recoverable')]
             );
         } catch (Throwable $e) {
             self::log_failure('update', $e);
@@ -248,6 +256,49 @@ final class Ax402_WC_Ucp_Checkout
         }
 
         return new WP_REST_Response(Ax402_WC_Ucp_Mapper::session($order), $was_cart ? 201 : 200);
+    }
+
+    /**
+     * @param array<string, mixed> $body
+     */
+    private function apply_payment_preference(WC_Order $order, array $body): void
+    {
+        if (!array_key_exists('payment', $body) || !is_array($body['payment'])) {
+            return;
+        }
+
+        $instruments = $body['payment']['instruments'] ?? null;
+        if (!is_array($instruments) || $instruments === []) {
+            return;
+        }
+
+        $instrument = Ax402_WC_Ucp_Asset_Match::preferred_instrument($instruments);
+        if (!Ax402_WC_Ucp_Asset_Match::has_preference($instrument)) {
+            return;
+        }
+
+        $options = Ax402_WC_Order_Payment::settlement_options_from_order($order);
+        if ($options === []) {
+            $identity = trim((string) ($instrument['id'] ?? $instrument['token_id'] ?? $instrument['tokenId'] ?? ''));
+            if ($identity !== '') {
+                Ax402_WC_Order_Payment::remember_preferred_token($order, $identity);
+            }
+
+            return;
+        }
+
+        $matched = Ax402_WC_Ucp_Asset_Match::match($options, $instrument);
+        if ($matched === null) {
+            $pairs = Ax402_WC_Ucp_Asset_Match::available_pairs($options);
+            throw new InvalidArgumentException(
+                'Requested network/asset is not available. Available: ' . wp_json_encode($pairs)
+            );
+        }
+
+        Ax402_WC_Order_Payment::remember_preferred_token(
+            $order,
+            (string) ($matched['tokenId'] ?? '')
+        );
     }
 
     /**

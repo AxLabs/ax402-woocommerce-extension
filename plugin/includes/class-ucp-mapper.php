@@ -69,6 +69,15 @@ final class Ax402_WC_Ucp_Mapper
                 'permalink_url' => $order->get_checkout_order_received_url(),
             ];
             $payload['payment'] = self::payment_after_settle($order);
+        } elseif ($status === Ax402_WC_Ucp_Status::READY) {
+            $options = Ax402_WC_Order_Payment::settlement_options_from_order($order);
+            $instruments = Ax402_WC_Ucp_Asset_Match::checkout_instruments(
+                $options,
+                Ax402_WC_Order_Payment::preferred_option_from_order($order, $options)
+            );
+            if ($instruments !== []) {
+                $payload['payment'] = ['instruments' => $instruments];
+            }
         }
 
         $quote = self::quote($order);
@@ -261,7 +270,7 @@ final class Ax402_WC_Ucp_Mapper
             if ($source === 'stablecoin-1to1' || $rate === '1') {
                 continue;
             }
-            if ($selected !== '' && (string) ($option['tokenId'] ?? '') === $selected) {
+            if ($selected !== '' && Ax402_WC_Ucp_Asset_Match::same_token_id((string) ($option['tokenId'] ?? ''), $selected)) {
                 $candidate = $option;
                 break;
             }
@@ -295,20 +304,26 @@ final class Ax402_WC_Ucp_Mapper
         $options = Ax402_WC_Order_Payment::settlement_options_from_order($order);
         $selected = (string) $order->get_meta(Ax402_WC_Order_Payment::META_SELECTED_TOKEN_ID);
         $symbol = 'TOKEN';
+        $asset = '';
+        $token_id = $selected !== '' ? $selected : 'instr_x402_1';
         foreach ($options as $option) {
-            if ($selected !== '' && (string) ($option['tokenId'] ?? '') === $selected) {
+            if ($selected !== '' && Ax402_WC_Ucp_Asset_Match::same_token_id((string) ($option['tokenId'] ?? ''), $selected)) {
                 $symbol = (string) ($option['symbol'] ?? $symbol);
                 $network = (string) ($option['network'] ?? $network);
+                $asset = (string) ($option['asset'] ?? '');
+                $token_id = (string) ($option['tokenId'] ?? $token_id);
                 break;
             }
         }
 
         $tx = (string) $order->get_transaction_id();
         $instrument = [
-            'id' => 'instr_x402_1',
+            'id' => $token_id,
             'handler_id' => 'org.x402.payment',
             'type' => 'x402',
             'selected' => true,
+            'network' => $network,
+            'asset' => $asset,
             'display' => [
                 'network' => $network,
                 'asset' => $symbol,

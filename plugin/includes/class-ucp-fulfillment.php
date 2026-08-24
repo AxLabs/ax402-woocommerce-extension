@@ -379,6 +379,15 @@ final class Ax402_WC_Ucp_Fulfillment
      * @param array<string, mixed> $dest
      * @return array<string, mixed>
      */
+    public static function coerce_destination(array $dest): array
+    {
+        return self::normalize_destination($dest);
+    }
+
+    /**
+     * @param array<string, mixed> $dest
+     * @return array<string, mixed>
+     */
     private static function normalize_destination(array $dest): array
     {
         $id = (string) ($dest['id'] ?? '');
@@ -390,12 +399,58 @@ final class Ax402_WC_Ucp_Fulfillment
         return [
             'id' => $id,
             'type' => (string) ($dest['type'] ?? 'shipping_address'),
-            'street_address' => (string) ($address['street_address'] ?? $dest['street_address'] ?? ''),
-            'address_locality' => (string) ($address['address_locality'] ?? $dest['address_locality'] ?? ''),
-            'address_region' => (string) ($address['address_region'] ?? $dest['address_region'] ?? ''),
-            'postal_code' => (string) ($address['postal_code'] ?? $dest['postal_code'] ?? ''),
-            'address_country' => strtoupper((string) ($address['address_country'] ?? $dest['address_country'] ?? '')),
+            'street_address' => self::first_postal_field($address, $dest, [
+                'street_address',
+                'address_line_1',
+                'address_line1',
+                'address1',
+            ]),
+            'address_locality' => self::first_postal_field($address, $dest, [
+                'address_locality',
+                'city',
+                'town',
+            ]),
+            'address_region' => self::first_postal_field($address, $dest, [
+                'address_region',
+                'region',
+                'state',
+                'province',
+            ]),
+            'postal_code' => self::first_postal_field($address, $dest, [
+                'postal_code',
+                'postcode',
+                'zip',
+                'zip_code',
+            ]),
+            'address_country' => strtoupper(self::first_postal_field($address, $dest, [
+                'address_country',
+                'country',
+            ])),
         ];
+    }
+
+    /**
+     * Official UCP postal keys first; common agent aliases after.
+     *
+     * @param array<string, mixed> $address
+     * @param array<string, mixed> $dest
+     * @param list<string> $keys
+     */
+    public static function first_postal_field(array $address, array $dest, array $keys): string
+    {
+        foreach ($keys as $key) {
+            foreach ([$address, $dest] as $bag) {
+                if (!isset($bag[$key]) || !is_scalar($bag[$key])) {
+                    continue;
+                }
+                $value = trim((string) $bag[$key]);
+                if ($value !== '') {
+                    return $value;
+                }
+            }
+        }
+
+        return '';
     }
 
     /**
