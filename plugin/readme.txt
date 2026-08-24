@@ -87,9 +87,12 @@ Yes. In gateway settings, leave “Show Ax402 credit on the pay page” unchecke
 == Changelog ==
 
 = 0.2.0 =
-* Optional UCP for buying agents: `/.well-known/ucp` and `/wp-json/ucp/v1` (off by default)
-* Catalog search/lookup, checkout with WooCommerce shipping/tax, x402 402 at complete
-* Human pay page and legacy `/wp-json/ax402/v1` agent REST unchanged
+* Optional UCP for buying agents: `/.well-known/ucp` plus REST and MCP shopping (off by default)
+* Catalog search/lookup and checkout with WooCommerce tax/shipping; x402 HTTP 402 at complete
+* MCP `complete_checkout` stays JSON-RPC 200 with PaymentRequired on `structuredContent` (nested `payment_required` kept for UCP clients)
+* Persist settlement-token selection across checkout update/complete; each token is its own x402 resource
+* `requires_escalation` plus `continue_url` when Woo has no shipping rates; JSON body `payment.payment_signature` for large JWTs (Hedera)
+* Human pay page confirmation state; legacy `/wp-json/ax402/v1` agent REST unchanged
 
 = 0.1.0 =
 * Initial release: Ax402 / x402 WooCommerce payment gateway
