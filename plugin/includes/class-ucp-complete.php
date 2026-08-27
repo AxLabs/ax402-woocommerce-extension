@@ -4,11 +4,14 @@ declare(strict_types=1);
 defined('ABSPATH') || exit;
 
 /**
- * UCP POST …/complete: 402 challenge relay + PAYMENT-SIGNATURE proxy.
+ * UCP POST …/complete: 402 challenge relay + settlement reconcile.
  *
- * Min-leak adapter: HTTP 402 is on the shop complete URL; the relayed
- * PaymentRequired.resource stays the Ax402 gateway URL. Agents retry complete,
- * not resource.url. See docs/ucp.md.
+ * Adapter era (ucp-x402-binding §3.1): HTTP 402 is on the shop complete URL;
+ * PaymentRequired.resource stays the Ax402 gateway URL. The shop MUST NOT
+ * replay PAYMENT-SIGNATURE to that gateway (confused deputy). Agents pay
+ * resource.url with standard x402, then POST complete again. This class
+ * GETs the gateway without a signature only to copy PAYMENT-REQUIRED.
+ * See docs/ucp.md.
  */
 final class Ax402_WC_Ucp_Complete
 {
@@ -37,6 +40,9 @@ final class Ax402_WC_Ucp_Complete
      */
     public function handle(string $session_id, WP_REST_Request $request, array $body): WP_REST_Response|WP_Error
     {
+        // $request is part of the REST/MCP dispatch signature. Older agents may
+        // still send PAYMENT-SIGNATURE on it; binding §3.1.5 forbids forwarding.
+        unset($request);
         $order = Ax402_WC_Ucp_Checkout::order_from_session($session_id);
         if (!$order instanceof WC_Order) {
             return Ax402_WC_Ucp_Response::rest_error(
@@ -45,7 +51,7 @@ final class Ax402_WC_Ucp_Complete
             );
         }
 
-        Ax402_WC_Settlement_Reconcile::reconcile_order($order);
+        Ax402_WC_Settlement_Reconcile::reconcile_order($order, null, true);
         $fresh = wc_get_order($order->get_id());
         if ($fresh instanceof WC_Order) {
             $order = $fresh;
@@ -119,19 +125,9 @@ final class Ax402_WC_Ucp_Complete
             (string) ($matched['tokenId'] ?? '')
         );
 
-        $signature = Ax402_WC_Ucp_Mcp_Payment::signature_from_body($body);
-        if ($signature === '') {
-            $signature = $this->http->header_from_request($request, 'payment-signature');
-        }
-        if ($signature === '') {
-            $signature = $this->http->header_from_request($request, 'x-payment');
-        }
-
-        if ($signature === '') {
-            return $this->challenge($order, $matched, $options);
-        }
-
-        return $this->submit_payment($order, $matched, $request, $signature, $body);
+        // Binding §3.1.5–6: ignore any PAYMENT-SIGNATURE on this request.
+        // Complete is challenge (unpaid) or reconcile (already handled above).
+        return $this->challenge($order, $matched, $options);
     }
 
     /**
@@ -200,131 +196,11 @@ final class Ax402_WC_Ucp_Complete
         return $response;
     }
 
-    /**
-     * @param array<string, mixed> $option
-     */
-    private function submit_payment(
-        WC_Order $order,
-        array $option,
-        WP_REST_Request $request,
-        string $signature,
-        array $body = []
-    ): WP_REST_Response {
-        $token_id = (string) ($option['tokenId'] ?? '');
-        try {
-            Ax402_WC_Order_Payment::lock_settlement_token($order, $token_id);
-            $order = wc_get_order($order->get_id()) ?: $order;
-        } catch (InvalidArgumentException $e) {
-            return Ax402_WC_Ucp_Response::rest_error(
-                200,
-                [Ax402_WC_Ucp_Response::message('error', 'payment_method_not_available', $e->getMessage(), 'recoverable')]
-            );
-        } catch (Throwable $e) {
-            return Ax402_WC_Ucp_Response::rest_error(
-                200,
-                [Ax402_WC_Ucp_Response::message('error', 'payment_failed', $e->getMessage(), 'recoverable')]
-            );
-        }
-
-        $url = (string) $order->get_meta(Ax402_WC_Order_Payment::META_GATEWAY_URL);
-        if ($url === '') {
-            $url = (string) ($option['gatewayUrl'] ?? '');
-        }
-        if (!$this->assert_url($order, $url)) {
-            return Ax402_WC_Ucp_Response::rest_error(
-                200,
-                [Ax402_WC_Ucp_Response::message('error', 'invalid', 'Settlement endpoint is not allowed.', 'recoverable')]
-            );
-        }
-
-        $headers = [
-            'payment-signature' => $signature,
-            'accept' => 'application/json',
-        ];
-        $sig_data = Ax402_WC_Ucp_Mcp_Payment::signature_data_from_body($body);
-        if ($sig_data === '') {
-            $sig_data = $this->http->header_from_request($request, 'payment-signature-data');
-        }
-        if ($sig_data !== '') {
-            $headers['payment-signature-data'] = $sig_data;
-        }
-
-        try {
-            $upstream = $this->http->request($url, 'POST', $headers, self::upstream_body($request));
-        } catch (Throwable $e) {
-            return Ax402_WC_Ucp_Response::rest_error(
-                200,
-                [Ax402_WC_Ucp_Response::message('error', 'payment_failed', $e->getMessage(), 'recoverable')]
-            );
-        }
-
-        if ($upstream['status'] === 402 || $upstream['status'] >= 400) {
-            $reason = $this->upstream_error_content($upstream);
-            $response = Ax402_WC_Ucp_Response::rest_error(
-                200,
-                [Ax402_WC_Ucp_Response::message('error', 'payment_failed', $reason, 'recoverable')],
-                'dev.ucp.shopping.checkout',
-                [
-                    'id' => $order->get_order_key(),
-                    'status' => Ax402_WC_Ucp_Status::READY,
-                ]
-            );
-            $required = $upstream['headers']['payment-required'] ?? '';
-            if ($required !== '') {
-                $response->header('PAYMENT-REQUIRED', $required);
-            }
-
-            return $response;
-        }
-
-        $receipt = $this->decode_payment_response($upstream['headers']['payment-response'] ?? '');
-        $tx = $this->transaction_from_receipt($receipt);
-        if ($tx !== '') {
-            $order->set_transaction_id($tx);
-            $order->save();
-        }
-
-        $pending_finality = false;
-        $paid = $this->poll_paid($order);
-        $order = wc_get_order($order->get_id()) ?: $order;
-        if (!$paid) {
-            $pending_finality = true;
-        }
-
-        $session = Ax402_WC_Ucp_Mapper::session($order);
-        if ($pending_finality) {
-            $session['status'] = Ax402_WC_Ucp_Status::COMPLETED;
-            $session['order'] = [
-                'id' => (string) $order->get_id(),
-                'permalink_url' => $order->get_checkout_order_received_url(),
-            ];
-            $session['messages'] = array_merge(
-                $session['messages'] ?? [],
-                [Ax402_WC_Ucp_Response::message(
-                    'info',
-                    'pending_finality',
-                    'Settlement was accepted; on-chain confirmation is still landing.',
-                    'recoverable'
-                )]
-            );
-        }
-
-        $session['payment'] = $this->payment_with_receipt($order, $receipt, $tx);
-        Ax402_WC_Ucp_Leak::assert_clean($session, Ax402_WC_Settings::all());
-
-        $response = new WP_REST_Response($session, 200);
-        if (($upstream['headers']['payment-response'] ?? '') !== '') {
-            $response->header('PAYMENT-RESPONSE', $upstream['headers']['payment-response']);
-        }
-
-        return $response;
-    }
-
     private function poll_paid(WC_Order $order): bool
     {
         $attempts = max(1, $this->poll_attempts);
         for ($i = 0; $i < $attempts; $i++) {
-            Ax402_WC_Settlement_Reconcile::reconcile_order($order);
+            Ax402_WC_Settlement_Reconcile::reconcile_order($order, null, true);
             $fresh = wc_get_order($order->get_id());
             if ($fresh instanceof WC_Order && $fresh->is_paid()) {
                 return true;
@@ -354,85 +230,5 @@ final class Ax402_WC_Ucp_Complete
             ],
             Ax402_WC_Ucp_Gateway_Http::allowed_paths_for_order($order)
         );
-    }
-
-    /**
-     * @param array{status:int, headers:array<string,string>, body:string} $upstream
-     */
-    private function upstream_error_content(array $upstream): string
-    {
-        $body = trim($upstream['body']);
-        if ($body !== '') {
-            $json = json_decode($body, true);
-            if (is_array($json)) {
-                foreach (['error', 'message', 'detail'] as $key) {
-                    if (!empty($json[$key]) && is_string($json[$key])) {
-                        return $json[$key];
-                    }
-                }
-            }
-            return substr($body, 0, 300);
-        }
-
-        return 'Payment was rejected (HTTP ' . $upstream['status'] . ').';
-    }
-
-    /**
-     * Do not forward MCP JSON-RPC envelopes to the Ax402 gateway.
-     */
-    private static function upstream_body(WP_REST_Request $request): string
-    {
-        $raw = (string) $request->get_body();
-        $parsed = json_decode($raw, true);
-        if (is_array($parsed) && ($parsed['jsonrpc'] ?? '') === '2.0') {
-            return '';
-        }
-
-        return $raw;
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function decode_payment_response(string $header): array
-    {
-        return Ax402_WC_Ucp_Mcp_Payment::decode_header($header);
-    }
-
-    /**
-     * @param array<string, mixed> $receipt
-     */
-    private function transaction_from_receipt(array $receipt): string
-    {
-        foreach (['transaction', 'txHash', 'tx_hash', 'hash'] as $key) {
-            if (!empty($receipt[$key]) && is_string($receipt[$key])) {
-                return $receipt[$key];
-            }
-        }
-        $settle = $receipt['settle'] ?? null;
-        if (is_array($settle) && !empty($settle['transaction']) && is_string($settle['transaction'])) {
-            return $settle['transaction'];
-        }
-
-        return '';
-    }
-
-    /**
-     * @param array<string, mixed> $receipt
-     * @return array{instruments: list<array<string, mixed>>}
-     */
-    private function payment_with_receipt(WC_Order $order, array $receipt, string $tx): array
-    {
-        $base = Ax402_WC_Ucp_Mapper::payment_after_settle($order);
-        $instrument = $base['instruments'][0];
-        if ($tx !== '') {
-            $instrument['display']['transaction'] = $tx;
-        }
-        if ($receipt !== []) {
-            $instrument['x402_receipt'] = Ax402_WC_Ucp_Leak::redact_facilitator_urls($receipt);
-        }
-        $base['instruments'][0] = $instrument;
-
-        return $base;
     }
 }

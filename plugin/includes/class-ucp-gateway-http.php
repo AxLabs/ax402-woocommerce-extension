@@ -6,6 +6,9 @@ defined('ABSPATH') || exit;
 /**
  * Server-side HTTP to an allowlisted Ax402 gateway URL (UCP complete only).
  *
+ * UCP complete may GET a challenge. It must not send PAYMENT-SIGNATURE
+ * (binding §3.1.5 no-impersonation).
+ *
  * Do not change {@see Ax402_WC_Gateway_Proxy_Controller} — that streams for humans.
  */
 final class Ax402_WC_Ucp_Gateway_Http

@@ -1,5 +1,5 @@
 /**
- * UCP agent E2E: discover → search → cart → checkout → MCP 402 → pay → GET order.
+ * UCP agent E2E: discover → search → cart → checkout → 402 → pay gateway → complete again.
  *
  * Requires:
  * - AX402_UCP_ENABLED=yes (re-seed with npm run env:e2e)
@@ -9,11 +9,11 @@
  *
  * Optional:
  * - E2E_UCP_PHYSICAL=1  use ax402-ship-box + a US shipping address
- * - E2E_UCP_TRANSPORT=rest  pay via REST complete headers instead of MCP
+ * - E2E_UCP_TRANSPORT=rest  pay via REST complete instead of MCP
  *
- * Default complete hop is MCP (structured payment_required + _meta retry).
- * The signed x402 resource is still the Ax402 gateway URL (min-leak adapter).
- * See docs/ucp.md.
+ * Adapter era: pay payment_required.resource.url (Ax402 gateway) with standard
+ * x402, then POST complete again with no signature. The shop must not replay
+ * PAYMENT-SIGNATURE. See docs/ucp.md.
  */
 import { buyerClientFromEnv } from '@ax402/sdk/buyer';
 
@@ -88,39 +88,42 @@ function paymentResourceUrl(paymentRequired) {
   return '';
 }
 
-async function capturePaymentSignature(resourceUrl) {
-  const buyer = await buyerClientFromEnv();
-  const captured = { signature: '', data: '' };
-  const inner = globalThis.fetch.bind(globalThis);
-  globalThis.fetch = async (input, init = {}) => {
-    const method = String(init.method || 'GET').toUpperCase();
-    const headers = new Headers(init.headers || {});
-    const sig = headers.get('payment-signature')
-      || headers.get('PAYMENT-SIGNATURE')
-      || headers.get('x-payment')
-      || '';
-    if (sig && method === 'POST') {
-      captured.signature = sig;
-      captured.data = headers.get('payment-signature-data')
-        || headers.get('PAYMENT-SIGNATURE-DATA')
-        || '';
-      return new Response('{}', {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
-    return inner(input, init);
-  };
-  try {
-    await buyer.pay({ url: resourceUrl });
-  } catch (err) {
-    if (!captured.signature) {
-      throw err;
-    }
-  } finally {
-    globalThis.fetch = inner;
+function decodePaymentRequiredHeader(value) {
+  if (!value || typeof value !== 'string') {
+    return null;
   }
-  return captured;
+  try {
+    const normalized = value.replace(/-/g, '+').replace(/_/g, '/');
+    const pad = normalized.length % 4 === 0 ? '' : '='.repeat(4 - (normalized.length % 4));
+    const json = Buffer.from(normalized + pad, 'base64').toString('utf8');
+    const parsed = JSON.parse(json);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function resourceHost(url) {
+  try {
+    return new URL(url).host;
+  } catch {
+    return '(invalid)';
+  }
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function payGatewayResource(resourceUrl) {
+  if (!resourceUrl) {
+    throw new Error('payment_required missing resource.url');
+  }
+  console.log('paying resource host', resourceHost(resourceUrl));
+  const buyer = await buyerClientFromEnv();
+  const payResult = await buyer.pay({ url: resourceUrl });
+  console.log('pay status', payResult.response?.status ?? payResult.status ?? payResult);
+  return payResult;
 }
 
 async function main() {
@@ -302,25 +305,39 @@ async function main() {
       selected: true,
     };
 
+  const completeBody = JSON.stringify({ payment: { instruments: [x402Instrument] } });
+
   if (transport === 'rest') {
-    const challenge = await jsonFetch(completeUrl, { method: 'POST', body: '{}' });
+    const challenge = await jsonFetch(completeUrl, { method: 'POST', body: completeBody });
     if (challenge.res.status !== 402) {
       throw new Error(`expected 402, got ${challenge.res.status} ${JSON.stringify(challenge.body)}`);
     }
-    const paymentRequired = challenge.res.headers.get('payment-required')
+    const paymentRequiredHeader = challenge.res.headers.get('payment-required')
       || challenge.res.headers.get('PAYMENT-REQUIRED');
-    if (!paymentRequired) {
+    if (!paymentRequiredHeader) {
       throw new Error('402 missing PAYMENT-REQUIRED header');
     }
+    const paymentRequired = decodePaymentRequiredHeader(paymentRequiredHeader);
+    const resourceUrl = paymentResourceUrl(paymentRequired);
+    if (!resourceUrl) {
+      throw new Error(`PAYMENT-REQUIRED missing resource: ${paymentRequiredHeader.slice(0, 80)}`);
+    }
     console.log('REST 402 challenge ok');
+    await payGatewayResource(resourceUrl);
 
-    const buyer = await buyerClientFromEnv();
-    const payResult = await buyer.pay({
-      url: completeUrl,
-      method: 'POST',
-      body: JSON.stringify({ payment: { instruments: [x402Instrument] } }),
-    });
-    console.log('pay status', payResult.response?.status ?? payResult.status ?? payResult);
+    let settled = null;
+    for (let i = 0; i < 15; i++) {
+      const retry = await jsonFetch(completeUrl, { method: 'POST', body: completeBody });
+      if (retry.body?.status === 'completed') {
+        settled = retry;
+        break;
+      }
+      await sleep(1000);
+    }
+    if (!settled) {
+      throw new Error('REST complete did not reach completed after paying resource.url');
+    }
+    console.log('REST complete status', settled.body.status, settled.body.order);
   } else {
     if (!mcpEndpoint) {
       throw new Error('discovery missing MCP endpoint');
@@ -355,23 +372,25 @@ async function main() {
       throw new Error(`payment_required missing resource: ${JSON.stringify(paymentRequired)}`);
     }
     console.log('MCP 402 challenge ok');
+    await payGatewayResource(resourceUrl);
 
-    const captured = await capturePaymentSignature(resourceUrl);
-    if (!captured.signature) {
-      throw new Error('buyer did not produce PAYMENT-SIGNATURE');
+    let paidSession = null;
+    for (let i = 0; i < 15; i++) {
+      const paid = await mcpTool(mcpEndpoint, 'complete_checkout', {
+        meta: { ...agentMeta, 'idempotency-key': crypto.randomUUID() },
+        id: sessionId,
+        checkout: { payment: { instruments: [x402Instrument] } },
+      });
+      paidSession = paid.body?.result?.structuredContent;
+      if (paidSession?.status === 'completed') {
+        break;
+      }
+      await sleep(1000);
     }
-    const paid = await mcpTool(mcpEndpoint, 'complete_checkout', {
-      meta: { ...agentMeta, 'idempotency-key': crypto.randomUUID() },
-      id: sessionId,
-      checkout: { payment: { instruments: [x402Instrument] } },
-    }, {
-      _meta: {
-        'x402/payment': captured.signature,
-        ...(captured.data ? { 'x402/payment-data': captured.data } : {}),
-      },
-    });
-    const paidSession = paid.body?.result?.structuredContent;
-    console.log('MCP pay status', paidSession?.status, paidSession?.order);
+    if (paidSession?.status !== 'completed') {
+      throw new Error(`MCP complete did not reach completed: ${JSON.stringify(paidSession)}`);
+    }
+    console.log('MCP complete status', paidSession.status, paidSession.order);
   }
 
   const got = await jsonFetch(`${endpoint}/checkout-sessions/${sessionId}`);

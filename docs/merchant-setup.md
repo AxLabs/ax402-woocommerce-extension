@@ -16,7 +16,7 @@ For what this plugin owns vs WooCommerce, see [context.md](context.md).
 4. Ensure store currency is **USD** (catalog). Shoppers still pay in the settlement token they pick on the pay page.
 5. For sub-cent catalog prices (e.g. `$0.001`), set **WooCommerce → Settings → General → Number of decimals** to at least **4** (USD defaults to 2, which displays those as `$0.00`). When Ax402 is enabled, the plugin raises display decimals to at least 4 and trims trailing zeros (so `$0.001` / `$0.10` render correctly).
 6. For local testing with real gateway upstream, expose the shop with a public tunnel and ensure Ax402 API `upstream_base_url` matches that public origin (re-onboard / update API if needed). Free ngrok requires the endpoint `upstream_auth` skip header — the plugin sets it automatically when `home_url` is an ngrok host (details in [architecture.md](architecture.md)).
-7. Optional: **Settlement reconcile** (default on) marks orders paid from Ax402 settlements if gateway upstream fulfill fails. Turn it off only when testing raw fulfill.
+7. **Settlement reconcile** (default on): status polls mark orders paid from Ax402 settlements. Needed because the gateway may call fulfill before the ledger row exists; also covers missing fulfill.
 8. If endpoint creation fails for **Base Sepolia** (`eip155:845320402`), confirm the seller account has that payment asset enabled in Ax402 (or temporarily use Base mainnet for smoke tests).
 
 ## Agent buy
@@ -31,3 +31,5 @@ POST /wp-json/ax402/v1/orders
 ax402 pay url --url "$payment_url"
 GET /wp-json/ax402/v1/orders/{order_key}
 ```
+
+Optional **UCP for agents** is off by default. Enable it on the Ax402 settings screen. Flow and 402-at-complete: [ucp.md](ucp.md). x402 binding: [ucp-x402-binding](https://github.com/AxLabs/ucp-x402-binding).

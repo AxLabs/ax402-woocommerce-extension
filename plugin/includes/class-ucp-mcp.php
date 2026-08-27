@@ -9,7 +9,8 @@ defined('ABSPATH') || exit;
  * Official 2026-04-08 OpenRPC methods wrap the same catalog/cart/checkout/order
  * classes as REST. Shopify UCP CLI 0.6.x negotiates MCP only. x402 payment on
  * this transport uses structured `payment_required` / `_meta["x402/payment"]`
- * (binding B3b); HTTP 402 headers stay for REST.
+ * (binding B3b, ideal-era retry). Adapter era: pay resource.url over HTTP,
+ * then complete_checkout again. HTTP 402 headers stay for REST.
  */
 final class Ax402_WC_Ucp_Mcp
 {
@@ -263,7 +264,7 @@ final class Ax402_WC_Ucp_Mcp
                 $by_id,
             ],
             'complete_checkout' => [
-                'Place the order after x402 payment. Without a signature this returns a PaymentRequired challenge in structuredContent (x402Version, resource, accepts; also nested as payment_required) and does not settle. Pay the shop REST complete URL in links[] type org.x402.complete (HTTP 402, then PAYMENT-SIGNATURE or JSON body payment.payment_signature on that same shop URL). Do not POST payment_required.resource.url (Ax402 gateway, only inside the signed challenge) and do not POST the MCP JSON-RPC URL. Or retry this tool with params._meta["x402/payment"] or checkout.payment.payment_signature. payment_required.accepts is only the selected/default token; GET checkout payment.instruments[] for every prepared asset and retry complete (or update_checkout first) with payment.instruments[{network,asset,selected:true}] to quote another token (e.g. XGAS). Pay that new challenge as-is; do not filter a different network/asset against it. Then get_checkout / get_order. Spec: https://github.com/AxLabs/ucp-x402-binding',
+                'Place the order after x402 payment. Without settlement this returns a PaymentRequired challenge in structuredContent (x402Version, resource, accepts; also nested as payment_required) and does not settle. If resource.url equals the shop REST complete URL in links[] type org.x402.complete, retry this tool with PAYMENT-SIGNATURE, params._meta["x402/payment"], or checkout.payment.payment_signature. If resource.url differs, pay resource.url over HTTP with standard x402 (method from extensions.bazaar.info.input.method, typically GET), then call this tool again (no signature required) so the shop can reconcile. Never pay the MCP JSON-RPC URL. payment_required.accepts is only the selected/default token; GET checkout payment.instruments[] for every prepared asset and retry complete (or update_checkout first) with payment.instruments[{network,asset,selected:true}] to quote another token (e.g. XGAS). Pay that new challenge as-is; do not filter a different network/asset against it. Then get_checkout / get_order. Spec: https://github.com/AxLabs/ucp-x402-binding',
                 $by_id,
             ],
             'cancel_checkout' => ['Cancel a checkout session.', $by_id],

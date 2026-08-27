@@ -6,6 +6,8 @@ Use this file as a short map of the repo. Prefer the linked docs over inventing 
 
 WordPress / WooCommerce **payment provider** for Ax402 / x402. Catalog stays USD; settlement tokens come from Ax402 platform config. See [docs/context.md](docs/context.md) and [docs/architecture.md](docs/architecture.md).
 
+Optional UCP for buying agents: [docs/ucp.md](docs/ucp.md). x402 on that surface follows [ucp-x402-binding](https://github.com/AxLabs/ucp-x402-binding).
+
 ## Releases & versioning
 
 **Required reading before any version bump or GitHub Release:** [RELEASE.md](RELEASE.md).

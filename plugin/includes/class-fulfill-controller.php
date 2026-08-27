@@ -4,7 +4,9 @@ declare(strict_types=1);
 defined('ABSPATH') || exit;
 
 /**
- * Upstream fulfill endpoint called by the Ax402 gateway after payment.
+ * Upstream fulfill endpoint. Ax402 uses this path as the x402 resource URL
+ * and may GET it before writing a settlement (Hedera). HTTP 200 ACKs the
+ * resource; payment_complete() runs only when a matching settlement exists.
  */
 final class Ax402_WC_Fulfill_Controller
 {
@@ -86,22 +88,52 @@ final class Ax402_WC_Fulfill_Controller
             }
         }
 
-        $order->payment_complete();
-        $order->add_order_note(__('Ax402 payment verified via fulfill upstream.', 'ax402-for-woocommerce'));
+        // The x402 resource URL is this fulfill path. Ax402 (Hedera) GETs it
+        // before submitting HTS and writing the settlement. HTTP 409 here
+        // aborts that settle path (order #144: fee-only transfer, no USDC).
+        // Path token is still not enough to mark paid (order #141). ACK 200
+        // without payment_complete(); reconcile marks paid when the row exists.
+        $match = Ax402_WC_Settlement_Reconcile::find_settlement_for_order($order);
+        if ($match === null) {
+            return new WP_REST_Response($this->receipt($order, false, false), 200);
+        }
+
+        $this->complete_from_settlement($order, $match);
+        $fresh = wc_get_order($order->get_id());
+        if ($fresh instanceof WC_Order) {
+            $order = $fresh;
+        }
+
+        return new WP_REST_Response($this->receipt($order, false, true), 200);
+    }
+
+    /**
+     * @param array<string, mixed> $match
+     */
+    private function complete_from_settlement(WC_Order $order, array $match): void
+    {
+        $tx = (string) ($match['tx'] ?? '');
+        $order->payment_complete($tx !== '' ? $tx : '');
+        $order->add_order_note(
+            sprintf(
+                /* translators: 1: settlement id 2: transaction hash */
+                __('Ax402 payment verified via fulfill upstream (settlement %1$s, tx %2$s).', 'ax402-for-woocommerce'),
+                (string) ($match['id'] ?? ''),
+                $tx !== '' ? $tx : 'n/a'
+            )
+        );
 
         if ($this->order_is_virtual_downloadable($order) && $order->has_status('processing')) {
             $order->update_status('completed', __('Virtual/downloadable order auto-completed after Ax402 payment.', 'ax402-for-woocommerce'));
         }
 
         Ax402_WC_Order_Payment::delete_endpoint_for_order($order);
-
-        return new WP_REST_Response($this->receipt($order, false), 200);
     }
 
     /**
      * @return array<string, mixed>
      */
-    private function receipt(WC_Order $order, bool $already_paid): array
+    private function receipt(WC_Order $order, bool $already_paid, bool $settled = true): array
     {
         $downloads = [];
         foreach ($order->get_downloadable_items() as $item) {
@@ -115,6 +147,7 @@ final class Ax402_WC_Fulfill_Controller
         return [
             'ok' => true,
             'already_paid' => $already_paid,
+            'settled' => $already_paid || $settled,
             'order_id' => $order->get_id(),
             'order_key' => $order->get_order_key(),
             'status' => $order->get_status(),

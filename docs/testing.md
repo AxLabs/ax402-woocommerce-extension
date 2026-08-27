@@ -12,7 +12,7 @@ npm run test:js
 
 PHP unit tests run via Docker Composer if local PHP is unavailable.
 
-UCP protocol rules (cents, discovery shape, leak scanner, asset matching, MCP PaymentRequired on `structuredContent` / `_meta["x402/payment"]`) live in `tests/php/Unit/Ucp*.php`. Live UCP settlement is `npm run test:e2e-ucp`. Shopify CLI smoke (no wallet) is `npm run test:e2e-ucp-cli` ([ucp.md](ucp.md)).
+UCP protocol rules (cents, discovery shape, leak scanner, asset matching, MCP PaymentRequired on `structuredContent` / `_meta["x402/payment"]`) live in `tests/php/Unit/Ucp*.php`. Live UCP settlement is `npm run test:e2e-ucp`. Shopify CLI smoke (no wallet) is `npm run test:e2e-ucp-cli`. See [ucp.md](ucp.md) and [ucp-x402-binding](https://github.com/AxLabs/ucp-x402-binding).
 
 ## Live control plane
 

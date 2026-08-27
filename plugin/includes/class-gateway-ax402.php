@@ -169,7 +169,7 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
                     'ax402-for-woocommerce'
                 ),
                 'description' => __(
-                    'When enabled, pay-page status polls mark the order paid if Ax402 already recorded an on-chain settlement but never called the store fulfill URL (common with tunnels). Disable this to test upstream fulfill alone — orders will stay pending until the gateway hits your shop.',
+                    'Status polls always complete unpaid orders from a matching Ax402 settlement. Required because the gateway may call fulfill before the ledger row exists. Leave enabled.',
                     'ax402-for-woocommerce'
                 ),
                 'default' => ($plugin['settlement_reconcile'] ?? 'yes') === 'yes' ? 'yes' : 'no',

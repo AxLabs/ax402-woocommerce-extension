@@ -30,7 +30,7 @@ final class Ax402_WC_Ucp_Response
     }
 
     /**
-     * Shop REST URL the x402 wallet must POST (HTTP 402, then PAYMENT-SIGNATURE).
+     * Shop REST URL to POST for a 402 challenge, then again after paying resource.url.
      */
     public static function checkout_complete_url(string $session_id): string
     {
@@ -54,11 +54,10 @@ final class Ax402_WC_Ucp_Response
     public static function payment_required_message(string $session_id, string $type = 'error'): array
     {
         $url = self::checkout_complete_url($session_id);
-        $content = 'Payment required (org.x402.payment). This checkout is ready; complete without an x402 signature does not place the order. '
-            . 'Pay by HTTP POST ' . $url . ' using any x402 wallet (expect HTTP 402 / PAYMENT-REQUIRED, then retry that same URL with PAYMENT-SIGNATURE). '
-            . 'On MCP, retry complete_checkout with params._meta["x402/payment"] after signing structuredContent (x402 PaymentRequired: x402Version, resource, accepts) or nested structuredContent.payment_required. '
-            . 'A complete payment MUST be possible with payment.payment_signature / payment.payment_signature_data in the JSON body (Hedera JWTs often exceed header size limits); PAYMENT-SIGNATURE is optional when the body carries the payload. '
-            . 'Pay that shop complete URL (also links[] type org.x402.complete), not payment_required.resource.url (Ax402 gateway resource inside the signed challenge) and not the MCP JSON-RPC URL. '
+        $content = 'Payment required (org.x402.payment). This checkout is ready; complete without settlement does not place the order. '
+            . 'POST ' . $url . ' issues HTTP 402 / PAYMENT-REQUIRED (MCP: PaymentRequired in structuredContent, also nested as payment_required; JSON-RPC stays HTTP 200). '
+            . 'Apply the binding derivation rule: if payment_required.resource.url equals this complete URL, retry this URL with PAYMENT-SIGNATURE (or JSON payment.payment_signature / payment.payment_signature_data, or MCP params._meta["x402/payment"]). '
+            . 'If resource.url differs (adapter: Ax402 gateway inside the signed challenge), pay resource.url with standard x402 using the HTTP method from extensions.bazaar.info.input.method (typically GET; do not assume POST), then POST this complete URL again (empty body or the same instrument selection) so the shop can reconcile. The shop will not relay PAYMENT-SIGNATURE to the gateway. Never pay the MCP JSON-RPC URL. '
             . 'payment_required.accepts is only the selected (or default) settlement token; each token is a separate x402 resource. '
             . 'See payment.instruments[] for every prepared network/asset. To quote another token, PUT/update checkout or retry complete with that instrument selected (network + asset), then pay the new challenge. '
             . 'Do not pay this challenge with a network or asset that is absent from payment_required.accepts. '
@@ -77,7 +76,7 @@ final class Ax402_WC_Ucp_Response
         return [
             'type' => self::LINK_X402_COMPLETE,
             'url' => self::checkout_complete_url($session_id),
-            'title' => 'x402 payment URL (HTTP POST; 402 challenge)',
+            'title' => 'UCP complete (POST; 402 challenge, then pay resource.url)',
         ];
     }
 

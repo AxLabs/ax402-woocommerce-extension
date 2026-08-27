@@ -25,12 +25,15 @@ final class UcpPaymentGuidanceTest extends TestCase
         $this->assertStringContainsString('PAYMENT-SIGNATURE', $message['content']);
         $this->assertStringContainsString('x402/payment', $message['content']);
         $this->assertStringContainsString('resource.url', $message['content']);
+        $this->assertStringContainsString('bazaar', $message['content']);
+        $this->assertStringContainsString('reconcile', $message['content']);
         $this->assertStringContainsString('payment.instruments', $message['content']);
         $this->assertStringContainsString('x402.assets', $message['content']);
         $this->assertStringContainsString('payment_required.accepts', $message['content']);
         $this->assertStringContainsString('structuredContent', $message['content']);
         $this->assertStringContainsString('payment.payment_signature', $message['content']);
         $this->assertStringContainsString(Ax402_WC_Ucp_Response::HANDLER_SPEC, $message['content']);
+        $this->assertStringNotContainsString('not payment_required.resource.url', $message['content']);
         $this->assertStringNotContainsString('saw', strtolower($message['content']));
         $this->assertStringNotContainsString('simple agent wallet', strtolower($message['content']));
     }
@@ -60,8 +63,11 @@ final class UcpPaymentGuidanceTest extends TestCase
         $this->assertStringContainsString('org.x402.complete', $complete['description']);
         $this->assertStringContainsString('resource.url', $complete['description']);
         $this->assertStringContainsString('x402/payment', $complete['description']);
+        $this->assertStringContainsString('bazaar', $complete['description']);
+        $this->assertStringContainsString('reconcile', $complete['description']);
         $this->assertStringContainsString('payment.instruments', $complete['description']);
         $this->assertStringContainsString('github.com/AxLabs/ucp-x402-binding', $complete['description']);
+        $this->assertStringNotContainsString('Do not POST payment_required.resource.url', $complete['description']);
         $this->assertStringNotContainsString('saw', strtolower($complete['description']));
     }
 }

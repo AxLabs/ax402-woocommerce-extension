@@ -139,5 +139,6 @@ Only after the matching annotated tag exists locally and on `origin`.
 - [README.md](README.md) — project overview
 - [docs/context.md](docs/context.md) — product framing
 - [docs/architecture.md](docs/architecture.md) — payment / fulfill flow
+- [docs/ucp.md](docs/ucp.md) — UCP for agents ([ucp-x402-binding](https://github.com/AxLabs/ucp-x402-binding))
 - [docs/testing.md](docs/testing.md) — test commands
 - [AGENTS.md](AGENTS.md) — short agent entrypoint

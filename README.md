@@ -13,8 +13,8 @@ This is a gateway extension — not a full storefront. Catalog, cart, customers,
 - Per-order gateway endpoints with multi-`accepts`, priced from the USD cart total
 - Human pay page: settlement picker, network switch + balance checks, `@ax402/react-paywall`
 - Agent REST: products, create order, order status (same multi-accept payment URL)
-- Optional UCP for buying agents (`/.well-known/ucp`, `/wp-json/ucp/v1`) — off by default; see [docs/ucp.md](docs/ucp.md)
-- Fulfill upstream secured by `order_key` + one-time token
+- Optional UCP for buying agents (`/.well-known/ucp`, `/wp-json/ucp/v1`) — off by default; see [docs/ucp.md](docs/ucp.md) and [ucp-x402-binding](https://github.com/AxLabs/ucp-x402-binding)
+- Fulfill upstream: valid `order_key` + token ACKs HTTP 200; `payment_complete()` only with a matching Ax402 settlement
 - `wp-env` local development + demo product seed
 - Unit + live control-plane tests
 
@@ -25,7 +25,7 @@ This is a gateway extension — not a full storefront. Catalog, cart, customers,
 | [**Context**](docs/context.md) | What the extension is / is not, concerns, currency model |
 | [**Local development**](docs/local-development.md) | Start wp-env, `.env`, seed products, tunnel, first payment |
 | [**E2E environment**](docs/e2e.md) | Ready-to-go seed + ngrok + programmatic / MetaMask pay |
-| [**UCP for agents**](docs/ucp.md) | Discovery, catalog, cart, checkout, order, x402 402-at-complete, min-leak adapter |
+| [**UCP for agents**](docs/ucp.md) | Discovery, catalog, cart, checkout, order, x402 402-at-complete ([ucp-x402-binding](https://github.com/AxLabs/ucp-x402-binding)) |
 | [Architecture](docs/architecture.md) | Payment flow, settlement lock, ngrok upstream_auth, reconcile |
 | [**Releases**](RELEASE.md) | SemVer, tagging, GitHub Releases, agent checklist |
 | [Merchant setup](docs/merchant-setup.md) | Production checklist + agent buy sketch |

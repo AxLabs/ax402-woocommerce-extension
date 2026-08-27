@@ -150,7 +150,7 @@ npm run test:e2e-ucp
 # E2E_UCP_PHYSICAL=1 npm run test:e2e-ucp
 ```
 
-Flow: discover → catalog search → create cart → create checkout from `cart_id` → MCP `complete_checkout` (PaymentRequired on `structuredContent`) → buyer signs → MCP retry with `_meta["x402/payment"]` → GET session `completed` → GET order. Set `E2E_UCP_TRANSPORT=rest` to pay via REST complete headers or JSON `payment.payment_signature`. Details: [ucp.md](ucp.md).
+Flow: discover → catalog search → create cart → create checkout from `cart_id` → MCP `complete_checkout` (PaymentRequired on `structuredContent`) → buyer pays `resource.url` (Ax402 gateway) → MCP `complete_checkout` again (reconcile, no signature) → GET session `completed` → GET order. Set `E2E_UCP_TRANSPORT=rest` for the same hop over REST complete. Details: [ucp.md](ucp.md). Binding: [ucp-x402-binding](https://github.com/AxLabs/ucp-x402-binding).
 
 Shopify `ucp` CLI smoke (discover → cart → checkout → complete **without** paying):
 
@@ -194,8 +194,8 @@ npm run env:stop
 | `is_available=no` | Fill `AX402_API_KEY` + `AX402_PAY_TO_ADDRESS`, `npm run env:e2e` |
 | Coming soon / “Pardon our dust” | Seed turns it off; re-run `npm run env:e2e` |
 | No payment methods | Same as `is_available=no` |
-| Fulfill never completes | Tunnel down, or `WP_HOME` / Ax402 upstream mismatch — re-run `npm run env:e2e` with `WP_BASE_URL`. Free ngrok: endpoints must include `upstream_auth` `ngrok-skip-browser-warning` (plugin sets this when the store host contains `ngrok`; place a new order or re-lock settlement after updating). Check order notes: “fulfill upstream” vs “settlement reconcile”. |
-| Order paid but note says reconcile | Upstream fulfill skipped/failed; gateway still settled. Fix tunnel/`upstream_auth`, or keep reconcile as safety net. |
+| Fulfill never completes | Tunnel down, or `WP_HOME` / Ax402 upstream mismatch — re-run `npm run env:e2e` with `WP_BASE_URL`. Free ngrok: endpoints must include `upstream_auth` `ngrok-skip-browser-warning` (plugin sets this when the store host contains `ngrok`; place a new order or re-lock settlement after updating). Hedera: fulfill ACKs 200 before USDC; Woo marks paid from the settlement row (order note: reconcile or fulfill upstream). |
+| Order paid but note says reconcile | Normal when Ax402 GETs fulfill before writing the ledger. Also happens if fulfill never reached the shop (tunnel). |
 | ZCHF (or FX token) amount looks like USD atomics | Settlement select must resolve the **per-token** endpoint before pay (`POST …/settlement`). Pay page does this automatically. |
 | Sepolia endpoint errors | Seller missing Sepolia USDC asset → try `AX402_NETWORK=mainnet` |
 | `test:e2e-pay` missing env | Set `WP_BASE_URL` and `AX402_EVM_PRIVATE_KEY` |

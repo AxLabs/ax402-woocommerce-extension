@@ -78,7 +78,7 @@ Yes, by design. Agent browse/buy routes are public storefront APIs. The fulfill 
 
 = What is UCP? =
 
-Optional Universal Commerce Protocol support for buying agents (`/.well-known/ucp` and `/wp-json/ucp/v1`). Off by default. Enable it on the Ax402 settings screen. The human pay page does not change.
+Optional Universal Commerce Protocol support for buying agents (`/.well-known/ucp` and `/wp-json/ucp/v1`). Off by default. Enable it on the Ax402 settings screen. The human pay page does not change. x402 payment on that surface follows https://github.com/AxLabs/ucp-x402-binding
 
 = Can I hide the Ax402 credit on the pay page? =
 

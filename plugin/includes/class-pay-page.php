@@ -27,7 +27,7 @@ final class Ax402_WC_Pay_Page
             return;
         }
 
-        Ax402_WC_Settlement_Reconcile::reconcile_order($order);
+        Ax402_WC_Settlement_Reconcile::reconcile_order($order, null, true);
         $order = wc_get_order($order_id);
         if (!$order instanceof WC_Order) {
             return;
@@ -264,7 +264,7 @@ final class Ax402_WC_Pay_Page
             wp_die(esc_html__('Order not found.', 'ax402-for-woocommerce'), 404);
         }
 
-        Ax402_WC_Settlement_Reconcile::reconcile_order($order);
+        Ax402_WC_Settlement_Reconcile::reconcile_order($order, null, true);
         $order = wc_get_order($order->get_id());
         if (!$order instanceof WC_Order) {
             wp_die(esc_html__('Order not found.', 'ax402-for-woocommerce'), 404);

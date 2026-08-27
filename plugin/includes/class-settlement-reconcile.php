@@ -4,8 +4,11 @@ declare(strict_types=1);
 defined('ABSPATH') || exit;
 
 /**
- * Complete unpaid orders when Ax402 already recorded an on-chain settlement
- * but the gateway never reached the shop fulfill upstream (common with tunnels).
+ * Complete unpaid orders from a matching Ax402 settlement.
+ *
+ * Ax402 may GET fulfill before writing the ledger (Hedera). Fulfill ACKs 200
+ * without payment_complete() in that case; status polls and UCP complete
+ * mark the order paid here. Also covers missing fulfill (tunnels).
  */
 final class Ax402_WC_Settlement_Reconcile
 {
@@ -87,15 +90,38 @@ final class Ax402_WC_Settlement_Reconcile
     }
 
     /**
+     * Look up a matching Ax402 settlement for this order's endpoint ids.
+     *
+     * Does not mark the order paid and does not consult the settlement_reconcile
+     * setting. Fulfill uses this so path-token GETs cannot payment_complete()
+     * without a ledger row (binding adapter era).
+     *
+     * @return array<string, mixed>|null
+     */
+    public static function find_settlement_for_order(
+        WC_Order $order,
+        ?Ax402_WC_Control_Plane_Client $client = null
+    ): ?array {
+        try {
+            return self::lookup_settlement($order, $client);
+        } catch (Throwable $e) {
+            return null;
+        }
+    }
+
+    /**
      * Mark the order paid when a matching Ax402 settlement exists.
      *
+     * @param bool $force When true, poll even if the settlement_reconcile setting is off
+     *                    (status polls and UCP complete must always reconcile).
      * @return bool True when the order is paid after this call.
      */
     public static function reconcile_order(
         WC_Order $order,
-        ?Ax402_WC_Control_Plane_Client $client = null
+        ?Ax402_WC_Control_Plane_Client $client = null,
+        bool $force = false
     ): bool {
-        if (!Ax402_WC_Settings::settlement_reconcile_enabled()) {
+        if (!$force && !Ax402_WC_Settings::settlement_reconcile_enabled()) {
             return false;
         }
 
@@ -107,64 +133,12 @@ final class Ax402_WC_Settlement_Reconcile
             return false;
         }
 
-        if ($order->get_payment_method() !== Ax402_WC_Gateway_Ax402::GATEWAY_ID) {
-            return false;
-        }
-
-        $endpoint_ids = Ax402_WC_Order_Payment::endpoint_ids_from_order($order);
-        if ($endpoint_ids === []) {
-            return false;
-        }
-
-        $client ??= Ax402_WC_Settings::client();
-        if ($client === null) {
-            return false;
-        }
-
-        $settings = Ax402_WC_Settings::all();
-        $api_ids = Ax402_WC_Settings::configured_api_ids($settings);
-        if ($api_ids === []) {
-            return false;
-        }
-
         try {
-            // Always refresh during reconcile so pay-page status polls see new
-            // settlements within ~1s instead of waiting out the transient TTL.
-            $settlements = [];
-            foreach ($api_ids as $api_id) {
-                foreach (self::fetch_settlements($client, $api_id, true) as $row) {
-                    $settlements[] = $row;
-                }
-            }
+            $match = self::lookup_settlement($order, $client);
         } catch (Throwable $e) {
             $order->add_order_note('Ax402 settlement reconcile failed: ' . $e->getMessage());
             $order->save();
             return false;
-        }
-
-        $amount_atomic = (string) $order->get_meta(Ax402_WC_Order_Payment::META_AMOUNT_ATOMIC);
-        $acceptable = [];
-        foreach (Ax402_WC_Order_Payment::settlement_options_from_order($order) as $option) {
-            if (!is_array($option)) {
-                continue;
-            }
-            $atomic = (string) ($option['amountAtomic'] ?? $option['amount_atomic'] ?? '');
-            if ($atomic !== '') {
-                $acceptable[] = $atomic;
-            }
-        }
-
-        $match = null;
-        foreach ($endpoint_ids as $endpoint_id) {
-            $match = self::find_matching_settlement(
-                $settlements,
-                $endpoint_id,
-                $amount_atomic,
-                $acceptable
-            );
-            if ($match !== null) {
-                break;
-            }
         }
         if ($match === null) {
             return false;
@@ -195,6 +169,68 @@ final class Ax402_WC_Settlement_Reconcile
         Ax402_WC_Order_Payment::delete_endpoint_for_order($order, $client);
 
         return $order->is_paid();
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private static function lookup_settlement(
+        WC_Order $order,
+        ?Ax402_WC_Control_Plane_Client $client = null
+    ): ?array {
+        if ($order->get_payment_method() !== Ax402_WC_Gateway_Ax402::GATEWAY_ID) {
+            return null;
+        }
+
+        $endpoint_ids = Ax402_WC_Order_Payment::endpoint_ids_from_order($order);
+        if ($endpoint_ids === []) {
+            return null;
+        }
+
+        $client ??= Ax402_WC_Settings::client();
+        if ($client === null) {
+            return null;
+        }
+
+        $api_ids = Ax402_WC_Settings::configured_api_ids(Ax402_WC_Settings::all());
+        if ($api_ids === []) {
+            return null;
+        }
+
+        // Always refresh so pay-page / UCP polls see new settlements within ~1s
+        // instead of waiting out the transient TTL.
+        $settlements = [];
+        foreach ($api_ids as $api_id) {
+            foreach (self::fetch_settlements($client, $api_id, true) as $row) {
+                $settlements[] = $row;
+            }
+        }
+
+        $amount_atomic = (string) $order->get_meta(Ax402_WC_Order_Payment::META_AMOUNT_ATOMIC);
+        $acceptable = [];
+        foreach (Ax402_WC_Order_Payment::settlement_options_from_order($order) as $option) {
+            if (!is_array($option)) {
+                continue;
+            }
+            $atomic = (string) ($option['amountAtomic'] ?? $option['amount_atomic'] ?? '');
+            if ($atomic !== '') {
+                $acceptable[] = $atomic;
+            }
+        }
+
+        foreach ($endpoint_ids as $endpoint_id) {
+            $match = self::find_matching_settlement(
+                $settlements,
+                $endpoint_id,
+                $amount_atomic,
+                $acceptable
+            );
+            if ($match !== null) {
+                return $match;
+            }
+        }
+
+        return null;
     }
 
     /**

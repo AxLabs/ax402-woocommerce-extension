@@ -158,8 +158,9 @@ final class Ax402_WC_Agent_Rest_Controller
             return new WP_Error('ax402_not_found', 'Order not found', ['status' => 404]);
         }
 
-        // Gateway may settle on-chain without reaching shop fulfill (e.g. tunnel blocks).
-        Ax402_WC_Settlement_Reconcile::reconcile_order($order);
+        // Gateway may settle after fulfill ACK, or skip fulfill (tunnel). Always
+        // complete from a matching settlement — do not wait for a second fulfill.
+        Ax402_WC_Settlement_Reconcile::reconcile_order($order, null, true);
         $order = wc_get_order($order_id);
         if (!$order instanceof WC_Order) {
             return new WP_Error('ax402_not_found', 'Order not found', ['status' => 404]);

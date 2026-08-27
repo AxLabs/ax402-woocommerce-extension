@@ -10,7 +10,7 @@ It supports two buyer types on the same order lifecycle:
 |---|---|
 | **Human** | Checkout → store pay page → wallet (e.g. MetaMask) via `@ax402/react-paywall` |
 | **Agent (legacy REST)** | `POST /wp-json/ax402/v1/orders` → pay the Ax402 gateway URL with a buyer SDK |
-| **Agent (UCP)** | `GET /.well-known/ucp` + REST `/wp-json/ucp/v1` catalog/cart/checkout/order (MCP at `/mcp`); x402 402 at `complete` (opt-in, off by default). Protocol 2026-04-08. See [ucp.md](ucp.md). |
+| **Agent (UCP)** | `GET /.well-known/ucp` + REST `/wp-json/ucp/v1` catalog/cart/checkout/order (MCP at `/mcp`); x402 402 at `complete` (opt-in, off by default). Protocol 2026-04-08. See [ucp.md](ucp.md) and [ucp-x402-binding](https://github.com/AxLabs/ucp-x402-binding). |
 
 Hosted control plane: `https://api.ax402.io`.
 
@@ -49,7 +49,7 @@ Those belong to **WooCommerce** (and optional third-party plugins). Merchants ma
 | Catalog prices, customers, order list | WooCommerce |
 | API key, pay-to wallet, settlement tokens, enable gateway | Plugin → **WooCommerce → Settings → Payments → Ax402** |
 | HTTP 402 challenge, payment verify, proxy to fulfill | Ax402 gateway |
-| Mark order paid after verified payment | Plugin fulfill REST |
+| Mark order paid after verified payment | Plugin fulfill REST (if settlement already exists) or settlement reconcile |
 
 ## Currency model (v0)
 
@@ -68,8 +68,8 @@ Those belong to **WooCommerce** (and optional third-party plugins). Merchants ma
 1. Checkout selects Ax402 → plugin creates/updates a per-order Ax402 endpoint priced to the total (multi-token `accepts`).
 2. Fulfill URL embeds `order_key` + a one-time `fulfill_token` stored on the order.
 3. Human pay page **locks** the chosen settlement token on the endpoint, then pays the **Ax402 gateway URL directly** (store origin registered via control-plane CORS).
-4. After on-chain settle, the gateway proxies to `{upstream_base_url}{path}` (with optional `upstream_auth` headers — e.g. ngrok skip). Woo fulfill runs `payment_complete()`.
-5. Optional **settlement reconcile** can mark the order paid from control-plane settlements if upstream fulfill never arrived.
+4. The gateway GETs `{upstream_base_url}{path}` (optional `upstream_auth` — e.g. ngrok skip). That hop may run **before** Ax402 writes the settlement. Woo fulfill ACKs HTTP 200; it calls `payment_complete()` **only** when a matching settlement already exists.
+5. **Settlement reconcile** (pay-page / agent / UCP status polls, UCP complete) marks the order paid from the control-plane row. That is the usual complete path after a fulfill ACK, and also covers missing fulfill.
 
 Detailed sequence, settlement lock, ngrok, and reconcile: [architecture.md](architecture.md).
 
@@ -87,6 +87,7 @@ Detailed sequence, settlement lock, ngrok, and reconcile: [architecture.md](arch
 - [Local development & seeding](local-development.md) — start wp-env, seed, tunnel, first payment
 - [E2E environment](e2e.md) — ready-to-go seed + ngrok + programmatic / MetaMask pay (`npm run env:e2e`)
 - [Architecture](architecture.md) — components and flows
+- [UCP for agents](ucp.md) — opt-in shopping + x402 complete ([ucp-x402-binding](https://github.com/AxLabs/ucp-x402-binding))
 - [Releases & versioning](../RELEASE.md) — SemVer, tags, GitHub Releases (agents: read before bumping)
 - [Merchant setup](merchant-setup.md) — production-oriented checklist
 - [Testing](testing.md) — unit, live control plane, E2E commands

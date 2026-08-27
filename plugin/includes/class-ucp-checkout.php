@@ -100,7 +100,7 @@ final class Ax402_WC_Ucp_Checkout
             );
         }
 
-        Ax402_WC_Settlement_Reconcile::reconcile_order($order);
+        Ax402_WC_Settlement_Reconcile::reconcile_order($order, null, true);
         $fresh = wc_get_order($order->get_id());
         if ($fresh instanceof WC_Order) {
             $order = $fresh;
@@ -249,7 +249,7 @@ final class Ax402_WC_Ucp_Checkout
             $order->save();
         }
 
-        Ax402_WC_Settlement_Reconcile::reconcile_order($order);
+        Ax402_WC_Settlement_Reconcile::reconcile_order($order, null, true);
         $fresh = wc_get_order($order->get_id());
         if ($fresh instanceof WC_Order) {
             $order = $fresh;
