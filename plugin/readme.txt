@@ -4,7 +4,7 @@ Tags: woocommerce, payments, crypto, usdc, x402
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 8.1
-Stable tag: 0.2.0
+Stable tag: 0.3.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -85,6 +85,11 @@ Optional Universal Commerce Protocol support for buying agents (`/.well-known/uc
 Yes. In gateway settings, leave “Show Ax402 credit on the pay page” unchecked (default).
 
 == Changelog ==
+
+= 0.3.0 =
+* UCP complete no longer replays buyer PAYMENT-SIGNATURE. Agents pay resource.url with standard x402, then complete again (https://github.com/AxLabs/ucp-x402-binding)
+* Fulfill ACKs HTTP 200 without marking the order paid until Ax402 has a matching settlement
+* Status polls always complete unpaid orders from a matching Ax402 settlement
 
 = 0.2.0 =
 * Optional UCP for buying agents: `/.well-known/ucp` plus REST and MCP shopping (off by default)
