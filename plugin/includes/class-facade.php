@@ -15,6 +15,7 @@ final class Ax402_WC_Facade
 
     public function redirect(): void
     {
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Public pay URL; Woo order key is the capability.
         $key = isset($_GET['key']) ? sanitize_text_field(wp_unslash((string) $_GET['key'])) : '';
         if ($key === '') {
             status_header(400);
@@ -37,7 +38,32 @@ final class Ax402_WC_Facade
             exit;
         }
 
-        wp_redirect($gateway_url, 302);
+        $parts = wp_parse_url($gateway_url);
+        $redirect_host = is_array($parts) ? (string) ($parts['host'] ?? '') : '';
+        $settings = Ax402_WC_Settings::all();
+        if (
+            $redirect_host === ''
+            || !Ax402_WC_Ucp_Gateway_Http::host_is_allowed(
+                $redirect_host,
+                [
+                    $settings['gateway_host'],
+                    $settings['hedera_gateway_host'],
+                ]
+            )
+        ) {
+            status_header(409);
+            echo 'Payment URL not ready';
+            exit;
+        }
+
+        add_filter(
+            'allowed_redirect_hosts',
+            static function (array $hosts) use ($redirect_host): array {
+                $hosts[] = $redirect_host;
+                return array_values(array_unique($hosts));
+            }
+        );
+        wp_safe_redirect($gateway_url, 302);
         exit;
     }
 }

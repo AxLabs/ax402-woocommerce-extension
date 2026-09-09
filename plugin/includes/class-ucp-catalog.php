@@ -412,7 +412,7 @@ final class Ax402_WC_Ucp_Catalog
     public static function description_object(string $primary, string $secondary, string $fallback): array
     {
         $html = $primary !== '' ? $primary : $secondary;
-        $plain = trim(function_exists('wp_strip_all_tags') ? wp_strip_all_tags($html) : strip_tags($html));
+        $plain = trim(wp_strip_all_tags($html));
         if ($plain === '') {
             $plain = $fallback;
         }

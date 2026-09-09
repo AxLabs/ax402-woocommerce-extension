@@ -26,7 +26,7 @@ final class Ax402_WC_Gateway_Cors
             return null;
         }
 
-        $parts = function_exists('wp_parse_url') ? wp_parse_url($url) : parse_url($url);
+        $parts = wp_parse_url($url);
         if (!is_array($parts) || empty($parts['scheme']) || empty($parts['host'])) {
             return null;
         }

@@ -11,7 +11,7 @@ if (!defined('WP_UNINSTALL_PLUGIN')) {
     exit;
 }
 
-$option_keys = [
+$ax402_wc_option_keys = [
     'ax402_wc_settings',
     'ax402_wc_platform_cache',
     'ax402_wc_cors_origins',
@@ -21,8 +21,8 @@ $option_keys = [
     'woocommerce_ax402_settings',
 ];
 
-foreach ($option_keys as $key) {
-    delete_option($key);
+foreach ($ax402_wc_option_keys as $ax402_wc_key) {
+    delete_option($ax402_wc_key);
 }
 
 delete_transient('ax402_wc_chainlist_v1');

@@ -107,7 +107,7 @@ final class Ax402_WC_Ucp_Leak
     {
         $hits = self::scan($payload, self::needles($settings));
         if ($hits !== []) {
-            throw new RuntimeException('UCP payload leaked facilitator data: ' . implode(', ', $hits));
+            throw new RuntimeException(esc_html('UCP payload leaked facilitator data: ' . implode(', ', $hits)));
         }
     }
 }

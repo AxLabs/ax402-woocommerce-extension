@@ -249,10 +249,12 @@ final class Ax402_WC_Pay_Page
 
     public function maybe_render(): void
     {
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Public pay URL; Woo order key is the capability.
         if (!isset($_GET['ax402_pay']) || (string) $_GET['ax402_pay'] !== '1') {
             return;
         }
 
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- Public pay URL; Woo order key is the capability.
         $key = isset($_GET['key']) ? sanitize_text_field(wp_unslash((string) $_GET['key'])) : '';
         if ($key === '') {
             wp_die(esc_html__('Missing order key.', 'ax402-for-woocommerce'), 400);

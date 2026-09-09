@@ -47,7 +47,7 @@ final class Ax402_WC_Ucp_Lines
             }
             $product = Ax402_WC_Ucp_Catalog::resolve_purchasable($id);
             if (!$product instanceof WC_Product) {
-                throw new InvalidArgumentException('Unknown or unpurchasable item id: ' . $id);
+                throw new InvalidArgumentException(esc_html('Unknown or unpurchasable item id: ' . $id));
             }
             $resolved[] = [
                 'product' => $product,

@@ -21,6 +21,42 @@ if (!defined('AX402_WC_PLUGIN_FILE')) {
     define('AX402_WC_PLUGIN_FILE', $plugin . '/ax402-for-woocommerce.php');
 }
 
+if (!function_exists('esc_html')) {
+    /**
+     * @param mixed $text
+     */
+    function esc_html($text)
+    {
+        return htmlspecialchars((string) $text, ENT_QUOTES, 'UTF-8');
+    }
+}
+
+if (!function_exists('wp_parse_url')) {
+    /**
+     * @return mixed
+     */
+    function wp_parse_url($url, $component = -1)
+    {
+        return parse_url($url, $component);
+    }
+}
+
+if (!function_exists('wp_strip_all_tags')) {
+    /**
+     * @param mixed $string
+     */
+    function wp_strip_all_tags($string, $remove_breaks = false)
+    {
+        $string = preg_replace('@<(script|style)[^>]*?>.*?</\\1>@si', '', (string) $string);
+        $string = strip_tags((string) $string);
+        if ($remove_breaks) {
+            $string = preg_replace('/[\r\n\t ]+/', ' ', $string);
+        }
+
+        return trim((string) $string);
+    }
+}
+
 if (!function_exists('wp_json_encode')) {
     /**
      * @param mixed $data

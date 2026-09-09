@@ -2,7 +2,7 @@
 Contributors: axlabs
 Tags: woocommerce, payments, crypto, usdc, x402
 Requires at least: 6.0
-Tested up to: 7.0
+Tested up to: 7.1
 Requires PHP: 8.1
 Stable tag: 0.3.0
 License: GPLv3 or later
@@ -45,7 +45,7 @@ Minified frontend assets live in `build/`. Readable source, build tooling, and t
 
 https://github.com/AxLabs/ax402-woocommerce-extension
 
-See also `THIRD_PARTY_LICENSES.md` in the plugin package.
+See also `assets/THIRD_PARTY_LICENSES.md` in the plugin package.
 
 ```
 npm --prefix plugin ci

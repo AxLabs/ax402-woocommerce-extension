@@ -77,7 +77,8 @@ final class Ax402_WC_Settlement_Reconcile
             return [];
         }
 
-        if (array_is_list($payload)) {
+        // PHP 8.1 array_is_list() without that name: Plugin Check maps it to WP 6.5+.
+        if ($payload === [] || array_keys($payload) === range(0, count($payload) - 1)) {
             return array_values(array_filter($payload, 'is_array'));
         }
 

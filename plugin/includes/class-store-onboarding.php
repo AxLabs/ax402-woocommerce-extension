@@ -50,7 +50,7 @@ final class Ax402_WC_Store_Onboarding
         ?Ax402_WC_Control_Plane_Client $client = null
     ): array {
         if ($family !== self::FAMILY_EVM && $family !== self::FAMILY_HEDERA) {
-            throw new InvalidArgumentException('Unknown API family: ' . $family);
+            throw new InvalidArgumentException(esc_html('Unknown API family: ' . $family));
         }
 
         $settings = Ax402_WC_Settings::all();

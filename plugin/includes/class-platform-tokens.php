@@ -27,7 +27,7 @@ final class Ax402_WC_Platform_Tokens
         return match ($mode) {
             'mainnet' => self::NETWORK_BASE_MAINNET,
             'sepolia' => self::NETWORK_SEPOLIA,
-            default => throw new InvalidArgumentException('Unknown network mode: ' . $mode),
+            default => throw new InvalidArgumentException(esc_html('Unknown network mode: ' . $mode)),
         };
     }
 
@@ -203,7 +203,7 @@ final class Ax402_WC_Platform_Tokens
             return $token;
         }
 
-        throw new RuntimeException('No enabled USDC token found for network ' . $network);
+        throw new RuntimeException(esc_html('No enabled USDC token found for network ' . $network));
     }
 
     /**
@@ -366,7 +366,7 @@ final class Ax402_WC_Platform_Tokens
     ): array {
         $schemes = $token['schemes'] ?? ['exact'];
         if (!is_array($schemes) || !in_array($scheme, $schemes, true)) {
-            throw new InvalidArgumentException('Scheme ' . $scheme . ' is not supported for this token');
+            throw new InvalidArgumentException(esc_html('Scheme ' . $scheme . ' is not supported for this token'));
         }
 
         $symbol = (string) ($token['symbol'] ?? 'TOKEN');

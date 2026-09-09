@@ -302,7 +302,7 @@ final class Ax402_WC_Order_Payment
         }
 
         if (!Ax402_WC_Fulfill_Auth::can_fulfill_status($order->get_status())) {
-            throw new RuntimeException('Order cannot accept payment in status ' . $order->get_status());
+            throw new RuntimeException(esc_html('Order cannot accept payment in status ' . $order->get_status()));
         }
 
         $token_id = trim($token_id);

@@ -57,7 +57,7 @@ final class Ax402_WC_Control_Plane_Client
     {
         $result = $this->request('GET', '/config/platform');
         if (isset($result['error'])) {
-            throw new RuntimeException('Platform config failed: ' . $result['error']);
+            throw new RuntimeException(esc_html('Platform config failed: ' . $result['error']));
         }
         return is_array($result['data'] ?? null) ? $result['data'] : [];
     }
@@ -71,7 +71,7 @@ final class Ax402_WC_Control_Plane_Client
     {
         $result = $this->request('GET', '/supported-networks');
         if (isset($result['error'])) {
-            throw new RuntimeException('Supported networks failed: ' . $result['error']);
+            throw new RuntimeException(esc_html('Supported networks failed: ' . $result['error']));
         }
         return is_array($result['data'] ?? null) ? $result['data'] : [];
     }
@@ -100,7 +100,7 @@ final class Ax402_WC_Control_Plane_Client
 
         $result = $this->request('GET', '/exchange-rates?' . $query);
         if (isset($result['error'])) {
-            throw new RuntimeException('Exchange rates failed: ' . $result['error']);
+            throw new RuntimeException(esc_html('Exchange rates failed: ' . $result['error']));
         }
 
         return is_array($result['data'] ?? null) ? $result['data'] : [];
@@ -113,7 +113,7 @@ final class Ax402_WC_Control_Plane_Client
     {
         $result = $this->request('GET', '/apis');
         if (isset($result['error'])) {
-            throw new RuntimeException('List APIs failed: ' . $result['error']);
+            throw new RuntimeException(esc_html('List APIs failed: ' . $result['error']));
         }
         return is_array($result['data'] ?? null) ? $result['data'] : [];
     }
@@ -150,7 +150,7 @@ final class Ax402_WC_Control_Plane_Client
 
         $result = $this->request('POST', '/apis', $body);
         if (isset($result['error'])) {
-            throw new RuntimeException('Create API failed: ' . $result['error']);
+            throw new RuntimeException(esc_html('Create API failed: ' . $result['error']));
         }
         if (!is_array($result['data'] ?? null) || empty($result['data']['id'])) {
             throw new RuntimeException('Create API returned no id');
@@ -166,7 +166,7 @@ final class Ax402_WC_Control_Plane_Client
     {
         $result = $this->request('GET', '/apis/' . rawurlencode($api_id));
         if (isset($result['error'])) {
-            throw new RuntimeException('Get API failed: ' . $result['error']);
+            throw new RuntimeException(esc_html('Get API failed: ' . $result['error']));
         }
         return is_array($result['data'] ?? null) ? $result['data'] : [];
     }
@@ -179,7 +179,7 @@ final class Ax402_WC_Control_Plane_Client
     {
         $result = $this->request('PUT', '/apis/' . rawurlencode($api_id), $body);
         if (isset($result['error'])) {
-            throw new RuntimeException('Update API failed: ' . $result['error']);
+            throw new RuntimeException(esc_html('Update API failed: ' . $result['error']));
         }
         return is_array($result['data'] ?? null) ? $result['data'] : [];
     }
@@ -188,7 +188,7 @@ final class Ax402_WC_Control_Plane_Client
     {
         $result = $this->request('DELETE', '/apis/' . rawurlencode($api_id));
         if (isset($result['error']) && (int) ($result['status'] ?? 0) !== 404) {
-            throw new RuntimeException('Delete API failed: ' . $result['error']);
+            throw new RuntimeException(esc_html('Delete API failed: ' . $result['error']));
         }
     }
 
@@ -199,7 +199,7 @@ final class Ax402_WC_Control_Plane_Client
     {
         $result = $this->request('GET', '/apis/' . rawurlencode($api_id) . '/endpoints');
         if (isset($result['error'])) {
-            throw new RuntimeException('List endpoints failed: ' . $result['error']);
+            throw new RuntimeException(esc_html('List endpoints failed: ' . $result['error']));
         }
         return is_array($result['data'] ?? null) ? $result['data'] : [];
     }
@@ -231,7 +231,7 @@ final class Ax402_WC_Control_Plane_Client
 
         $result = $this->request('POST', '/apis/' . rawurlencode($api_id) . '/endpoints', $body);
         if (isset($result['error'])) {
-            throw new RuntimeException('Create endpoint failed: ' . $result['error']);
+            throw new RuntimeException(esc_html('Create endpoint failed: ' . $result['error']));
         }
         if (!is_array($result['data'] ?? null)) {
             throw new RuntimeException('Create endpoint returned invalid payload');
@@ -274,7 +274,7 @@ final class Ax402_WC_Control_Plane_Client
             $body
         );
         if (isset($result['error'])) {
-            throw new RuntimeException('Update endpoint failed: ' . $result['error']);
+            throw new RuntimeException(esc_html('Update endpoint failed: ' . $result['error']));
         }
         return is_array($result['data'] ?? null) ? $result['data'] : [];
     }
@@ -286,7 +286,7 @@ final class Ax402_WC_Control_Plane_Client
             '/apis/' . rawurlencode($api_id) . '/endpoints/' . rawurlencode($endpoint_id)
         );
         if (isset($result['error']) && (int) ($result['status'] ?? 0) !== 404) {
-            throw new RuntimeException('Delete endpoint failed: ' . $result['error']);
+            throw new RuntimeException(esc_html('Delete endpoint failed: ' . $result['error']));
         }
     }
 
@@ -299,7 +299,7 @@ final class Ax402_WC_Control_Plane_Client
     {
         $result = $this->request('GET', '/apis/' . rawurlencode($api_id) . '/settlements');
         if (isset($result['error'])) {
-            throw new RuntimeException('List settlements failed: ' . $result['error']);
+            throw new RuntimeException(esc_html('List settlements failed: ' . $result['error']));
         }
 
         return Ax402_WC_Settlement_Reconcile::normalize_settlements_payload($result['data'] ?? null);
@@ -312,7 +312,7 @@ final class Ax402_WC_Control_Plane_Client
     {
         $result = $this->request('GET', '/apis/' . rawurlencode($api_id) . '/cors');
         if (isset($result['error'])) {
-            throw new RuntimeException('Get CORS failed: ' . $result['error']);
+            throw new RuntimeException(esc_html('Get CORS failed: ' . $result['error']));
         }
         $origins = is_array($result['data']['origins'] ?? null) ? $result['data']['origins'] : [];
         return array_values(array_filter(array_map('strval', $origins)));
@@ -332,7 +332,7 @@ final class Ax402_WC_Control_Plane_Client
             ['origins' => array_values($origins)]
         );
         if (isset($result['error'])) {
-            throw new RuntimeException('Put CORS failed: ' . $result['error']);
+            throw new RuntimeException(esc_html('Put CORS failed: ' . $result['error']));
         }
         $out = is_array($result['data']['origins'] ?? null) ? $result['data']['origins'] : [];
         return array_values(array_filter(array_map('strval', $out)));
@@ -351,7 +351,7 @@ final class Ax402_WC_Control_Plane_Client
             ['origin' => $origin]
         );
         if (isset($result['error'])) {
-            throw new RuntimeException('Add CORS origin failed: ' . $result['error']);
+            throw new RuntimeException(esc_html('Add CORS origin failed: ' . $result['error']));
         }
         $out = is_array($result['data']['origins'] ?? null) ? $result['data']['origins'] : [];
         return array_values(array_filter(array_map('strval', $out)));
@@ -367,7 +367,7 @@ final class Ax402_WC_Control_Plane_Client
             '/apis/' . rawurlencode($api_id) . '/cors?origin=' . rawurlencode($origin)
         );
         if (isset($result['error'])) {
-            throw new RuntimeException('Remove CORS origin failed: ' . $result['error']);
+            throw new RuntimeException(esc_html('Remove CORS origin failed: ' . $result['error']));
         }
         $out = is_array($result['data']['origins'] ?? null) ? $result['data']['origins'] : [];
         return array_values(array_filter(array_map('strval', $out)));
@@ -440,7 +440,7 @@ final class Ax402_WC_Control_Plane_Client
      */
     public static function upstream_auth_for_base_url(string $base_url): ?array
     {
-        $host = (string) (parse_url($base_url, PHP_URL_HOST) ?: '');
+        $host = (string) (wp_parse_url($base_url, PHP_URL_HOST) ?: '');
         if ($host === '' || stripos($host, 'ngrok') === false) {
             return null;
         }

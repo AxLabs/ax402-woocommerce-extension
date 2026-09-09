@@ -60,7 +60,7 @@ final class Ax402_WC_Ucp_Gateway_Http
         array $configured_hosts,
         array $allowed_paths
     ): bool {
-        $parts = parse_url($gateway_url);
+        $parts = wp_parse_url($gateway_url);
         if (!is_array($parts) || empty($parts['host']) || empty($parts['scheme'])) {
             return false;
         }
@@ -128,7 +128,7 @@ final class Ax402_WC_Ucp_Gateway_Http
 
         $response = wp_remote_request($url, $args);
         if (is_wp_error($response)) {
-            throw new RuntimeException($response->get_error_message());
+            throw new RuntimeException(esc_html($response->get_error_message()));
         }
 
         $header_map = [];

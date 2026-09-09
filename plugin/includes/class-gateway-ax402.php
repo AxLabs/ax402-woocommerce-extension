@@ -47,6 +47,7 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
     public function get_icon(): string
     {
         if ($this->icon === '') {
+            // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- WooCommerce core filter.
             return apply_filters('woocommerce_gateway_icon', '', $this->id);
         }
 
@@ -56,6 +57,7 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
             esc_attr($this->get_title())
         );
 
+        // phpcs:ignore WordPress.NamingConventions.PrefixAllGlobals.NonPrefixedHooknameFound -- WooCommerce core filter.
         return apply_filters('woocommerce_gateway_icon', $icon, $this->id);
     }
 
@@ -592,7 +594,7 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
 
         $refresh_key = $this->get_field_key('refresh_platform_tokens');
         // phpcs:ignore WordPress.Security.NonceVerification.Missing -- WC settings form already verified.
-        $refresh_posted = isset($_POST[$refresh_key]) ? (string) wp_unslash($_POST[$refresh_key]) : '0';
+        $refresh_posted = isset($_POST[$refresh_key]) ? sanitize_text_field(wp_unslash($_POST[$refresh_key])) : '0';
         $refresh_requested = $refresh_posted !== '' && $refresh_posted !== '0';
 
         $should_refresh = $refresh_requested
