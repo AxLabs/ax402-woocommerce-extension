@@ -120,10 +120,10 @@ final class ExchangeRatesTest extends TestCase
 
     public function test_candidate_rate_dates_weekday_and_weekend(): void
     {
-        // Monday: today → yesterday (Sun) → Friday.
+        // Monday: today → Friday (Sunday skipped).
         $monday = new \DateTimeImmutable('2026-08-03T15:00:00Z');
         $this->assertSame(
-            ['2026-08-03', '2026-08-02', '2026-07-31'],
+            ['2026-08-03', '2026-07-31'],
             Ax402_WC_Control_Plane_Exchange_Rates::candidate_rate_dates($monday)
         );
 
@@ -134,17 +134,17 @@ final class ExchangeRatesTest extends TestCase
             Ax402_WC_Control_Plane_Exchange_Rates::candidate_rate_dates($tuesday)
         );
 
-        // Saturday: today → yesterday (Fri); business-day fallback equals yesterday.
+        // Saturday: skip weekend dates, use Friday only.
         $saturday = new \DateTimeImmutable('2026-08-01T15:00:00Z');
         $this->assertSame(
-            ['2026-08-01', '2026-07-31'],
+            ['2026-07-31'],
             Ax402_WC_Control_Plane_Exchange_Rates::candidate_rate_dates($saturday)
         );
 
-        // Sunday: today → yesterday (Sat) → Friday.
+        // Sunday: skip weekend dates, use Friday only.
         $sunday = new \DateTimeImmutable('2026-08-02T15:00:00Z');
         $this->assertSame(
-            ['2026-08-02', '2026-08-01', '2026-07-31'],
+            ['2026-07-31'],
             Ax402_WC_Control_Plane_Exchange_Rates::candidate_rate_dates($sunday)
         );
     }
@@ -214,7 +214,7 @@ final class ExchangeRatesTest extends TestCase
             static function (string $method, string $url, ?array $body) use ($empty, $filled, &$urls): array {
                 unset($method, $body);
                 $urls[] = $url;
-                if (str_contains($url, 'date=2026-08-03') || str_contains($url, 'date=2026-08-02')) {
+                if (str_contains($url, 'date=2026-08-03')) {
                     return ['status' => 200, 'body' => $empty];
                 }
                 if (str_contains($url, 'date=2026-07-31')) {
@@ -225,13 +225,12 @@ final class ExchangeRatesTest extends TestCase
             }
         );
 
-        // Monday: today → Sunday (yesterday) → Friday.
+        // Monday: today → Friday (Sunday skipped).
         $now = new \DateTimeImmutable('2026-08-03T12:00:00Z');
         $rates = new Ax402_WC_Control_Plane_Exchange_Rates($client, true, $now);
         $this->assertSame('1', $rates->rate_usd_to_token('XGAS', 'eip155:47763'));
-        $this->assertCount(3, $urls);
+        $this->assertCount(2, $urls);
         $this->assertStringContainsString('date=2026-08-03', $urls[0]);
-        $this->assertStringContainsString('date=2026-08-02', $urls[1]);
-        $this->assertStringContainsString('date=2026-07-31', $urls[2]);
+        $this->assertStringContainsString('date=2026-07-31', $urls[1]);
     }
 }

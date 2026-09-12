@@ -23,7 +23,7 @@ Checkout (USD)
     │
     ▼
 prepare order endpoint
-  · multi-token accepts[] (FX from control plane / 1:1 stables)
+  · one endpoint, multi-token accepts[] (FX from control plane / 1:1 stables)
   · path = /wp-json/ax402/v1/fulfill/{order_key}/{fulfill_token}
   · upstream_base_url = store public origin (home_url)
   · if upstream host is ngrok*: endpoint upstream_auth
@@ -33,7 +33,7 @@ prepare order endpoint
 Pay page (store origin)
   · shopper picks settlement token (USDC / ZCHF / …)
   · POST /wp-json/ax402/v1/orders/{key}/settlement
-      → lock endpoint to that single accept (FX amount)
+      → remember preference (shared gateway_url; paywall policy selects the accept)
   · PaywallGate fetches gateway URL directly (CORS)
     │
     ├─ unpaid GET  → 402 Payment-Required
@@ -55,22 +55,22 @@ Pay page (store origin)
 
 Agents follow the same gateway GET fulfill → settle → reconcile path; they call the gateway URL from a buyer SDK instead of the pay page.
 
-## Per-token endpoints
+## One API, one endpoint
 
-Payment prep creates **one temporary Ax402 endpoint per enabled settlement token** (single `accept` each). Example: USDC on Base, USDC on Hedera, and XGAS on Neo X → three endpoints with distinct fulfill path suffixes.
+Payment prep creates **one temporary Ax402 endpoint** with every priced token in `accepts[]`. Example: USDC on Base, USDC on Hedera, and XGAS on Neo X → one endpoint, three accepts, one fulfill path.
 
-Before `PaywallGate` runs, the pay page selects the shopper’s token via:
+Before `PaywallGate` runs, the pay page records the shopper’s token via:
 
 `POST /wp-json/ax402/v1/orders/{order_key}/settlement` `{ "tokenId": "…" }`
 
-That returns the pre-created `gateway_url` / `endpoint_id` for that token (no multi-accept rewrite). This avoids gateway bugs when co-listing currencies on one endpoint.
+That updates order meta and paywall policy (`preferredNetworks` / `preferredAssets`). It does not rewrite the control-plane endpoint. The gateway 402 already lists every accept with the correct atomic amount.
 
-## Dual pay-to & dual APIs
+## Dual pay-to, one API
 
-- **EVM:** one `pay_to_address` for all `eip155:*` networks on the store’s EVM Ax402 API (`api_id` / `gateway_host`).
-- **Hedera:** `pay_to_hedera_account_id` (`0.0.x`) on a **separate** Hedera Ax402 API (`hedera_api_id` / `hedera_gateway_host`). Editable only when any Hedera settlement token is enabled. WalletConnect project id is required for Hedera shopper wallets.
+- **EVM:** one `pay_to_address` for all `eip155:*` networks (fallback recipient).
+- **Hedera:** `pay_to_hedera_account_id` (`0.0.x`) in `pay_to_addresses` keyed by CAIP-2 network (e.g. `"hedera:mainnet"`). Editable only when any Hedera settlement token is enabled. WalletConnect project id is required for Hedera shopper wallets.
 
-The control plane rejects mixing `eip155` and `hedera` payment tokens on one API, so the plugin maintains **two store APIs** and creates per-token temporary endpoints on the matching family. Each API is scoped with `accept_all_tokens=false` and family-only `accepted_token_ids`.
+A single store API is scoped with `accept_all_tokens=false` and the merchant’s `accepted_token_ids` (EVM and Hedera together). Mixing families without `pay_to_addresses` still fails (`hedera:…: payTo: invalid Hedera account id`). Legacy `hedera_api_id` values are kept for in-flight order cleanup only.
 
 Hedera payment requirements include `extra.feePayer` from facilitator `GET /supported-networks` (or `signers["hedera:*"]`). The shopper only **signs** a partially-signed `TransferTransaction`; the facilitator co-signs, pays network fees, and submits.
 
@@ -82,7 +82,7 @@ The x402 resource URL uses the fulfill path. The gateway GETs:
 
 That hop may run **before** Ax402 submits the chain transfer and writes the settlement (observed on Hedera). Woo must return HTTP 200 so settle proceeds. A 409 “not settled” aborts that path (fee-only transfer, no USDC).
 
-`ensure_api()` / `ensure_hedera_api()` keep each family’s `upstream_base_url` aligned with `home_url()` (the public tunnel in E2E).
+`ensure_api()` keeps the store API `upstream_base_url` aligned with `home_url()` (the public tunnel in E2E).
 
 **Free ngrok** (`*.ngrok-free.dev`) returns interstitial HTML (`ERR_NGROK_6024`) to non-browser clients unless the request includes `ngrok-skip-browser-warning`. When the store origin host contains `ngrok`, endpoint create/update sets:
 
@@ -100,7 +100,7 @@ The gateway injects that header on the upstream hop. Without it, settle can succ
 
 ## Settlement reconcile
 
-Pay-page, agent, and UCP status polls always ask the control plane for settlements and, if a matching on-chain settlement exists for **any** of the order’s per-token `endpoint_id`s, mark the order paid. That is the usual complete path when fulfill ACKed before the ledger row existed. It also covers missing fulfill (tunnels).
+Pay-page, agent, and UCP status polls always ask the control plane for settlements and, if a matching on-chain settlement exists for the order’s `endpoint_id` (or any leftover per-token ids on older orders), mark the order paid. That is the usual complete path when fulfill ACKed before the ledger row existed. It also covers missing fulfill (tunnels).
 
 Matching is by **endpoint_id** (authoritative). Amount comparison is best-effort only — FX / decimal differences must not block reconcile.
 
@@ -108,7 +108,7 @@ Reconciled orders note: **Gateway upstream fulfill was missing.**
 
 ## Amount / FX notes
 
-- Catalog total is USD; non-stable tokens use control-plane `GET /exchange-rates?quote=usd&date=YYYY-MM-DD` (today → yesterday → closest previous business day on empty/error).
+- Catalog total is USD; non-stable tokens use control-plane `GET /exchange-rates?quote=usd&date=YYYY-MM-DD` (weekdays: today → yesterday if a weekday → closest previous business day; weekends skip Sat/Sun and use Friday). Results are cached 5 minutes; checkout and the pay page reuse that cache.
 - When truncating to the gateway’s max fraction digits, amounts **ceil** (round up) so the charged atomic is never below the converted value.
 - Primary meta `_ax402_amount_atomic` follows the selected / primary token (not always 6-decimal USDC).
 

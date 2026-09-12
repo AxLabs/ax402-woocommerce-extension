@@ -93,9 +93,8 @@ final class Ax402_WC_Ucp_Asset_Match
     /**
      * UCP payment.instruments for a checkout (no gateway URLs).
      *
-     * Each Ax402 settlement token is its own x402 resource. Listing them here
-     * lets an agent select XGAS vs USDC before complete; the 402 accepts[]
-     * still come from only the selected (or default) endpoint.
+     * Listing every prepared token lets an agent prefer XGAS vs USDC before
+     * complete. The 402 accepts[] on the shared gateway URL lists them all.
      *
      * @param list<array<string, mixed>> $options
      * @param array<string, mixed>|null $selected matched settlement option

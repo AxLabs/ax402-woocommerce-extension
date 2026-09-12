@@ -42,5 +42,6 @@ docker run --rm \
   -e AX402_API_KEY="${AX402_API_KEY:-}" \
   -e AX402_BASE_URL="${AX402_BASE_URL:-https://api.ax402.io}" \
   -e AX402_PAY_TO_ADDRESS="${AX402_PAY_TO_ADDRESS:-}" \
+  -e AX402_PAY_TO_HEDERA_ACCOUNT_ID="${AX402_PAY_TO_HEDERA_ACCOUNT_ID:-}" \
   composer:2 \
   bash -lc 'mkdir -p /tmp/composer && cd plugin && composer install --no-interaction && ../plugin/vendor/bin/phpunit -c ../phpunit.xml.dist '"$*"

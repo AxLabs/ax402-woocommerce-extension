@@ -10,7 +10,7 @@ This is a gateway extension — not a full storefront. Catalog, cart, customers,
 
 - Checkout payment method `ax402`
 - Multi-asset settlement from Ax402 platform `payment_tokens` (admin multi-select)
-- Per-order gateway endpoints with multi-`accepts`, priced from the USD cart total
+- Per-order gateway endpoint with multi-token `accepts[]`, priced from the USD cart total
 - Human pay page: settlement picker, network switch + balance checks, `@ax402/react-paywall`
 - Agent REST: products, create order, order status (same multi-accept payment URL)
 - Optional UCP for buying agents (`/.well-known/ucp`, `/wp-json/ucp/v1`) — off by default; see [docs/ucp.md](docs/ucp.md) and [ucp-x402-binding](https://github.com/AxLabs/ucp-x402-binding)

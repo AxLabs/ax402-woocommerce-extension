@@ -4,8 +4,8 @@ declare(strict_types=1);
 defined('ABSPATH') || exit;
 
 /**
- * Ensures per-store Ax402 APIs exist (separate EVM and Hedera APIs — control plane
- * cannot mix eip155 and hedera payment tokens on one API).
+ * Ensures one store Ax402 API exists. EVM and Hedera tokens share that API
+ * when pay_to_addresses maps each Hedera CAIP-2 network to a 0.0.x account.
  */
 final class Ax402_WC_Store_Onboarding
 {
@@ -17,125 +17,72 @@ final class Ax402_WC_Store_Onboarding
      */
     public static function ensure_api(?Ax402_WC_Control_Plane_Client $client = null): array
     {
-        return self::ensure_api_for_family(self::FAMILY_EVM, $client);
-    }
-
-    /**
-     * @return array{api_id:string,gateway_host:string,gateway_url:string,api:array<string,mixed>,family:string}
-     */
-    public static function ensure_hedera_api(?Ax402_WC_Control_Plane_Client $client = null): array
-    {
-        return self::ensure_api_for_family(self::FAMILY_HEDERA, $client);
-    }
-
-    /**
-     * @return array{api_id:string,gateway_host:string,gateway_url:string,api:array<string,mixed>,family:string}
-     */
-    public static function ensure_api_for_network(
-        string $network,
-        ?Ax402_WC_Control_Plane_Client $client = null
-    ): array {
-        $family = Ax402_WC_Platform_Tokens::is_hedera_network($network)
-            ? self::FAMILY_HEDERA
-            : self::FAMILY_EVM;
-
-        return self::ensure_api_for_family($family, $client);
-    }
-
-    /**
-     * @return array{api_id:string,gateway_host:string,gateway_url:string,api:array<string,mixed>,family:string}
-     */
-    public static function ensure_api_for_family(
-        string $family,
-        ?Ax402_WC_Control_Plane_Client $client = null
-    ): array {
-        if ($family !== self::FAMILY_EVM && $family !== self::FAMILY_HEDERA) {
-            throw new InvalidArgumentException(esc_html('Unknown API family: ' . $family));
-        }
-
         $settings = Ax402_WC_Settings::all();
         $client ??= Ax402_WC_Settings::client();
         if ($client === null) {
             throw new RuntimeException('Ax402 API key is not configured');
         }
 
-        $pay_to = $family === self::FAMILY_HEDERA
-            ? trim($settings['pay_to_hedera_account_id'])
-            : trim($settings['pay_to_address']);
-        if ($pay_to === '') {
-            throw new RuntimeException(
-                $family === self::FAMILY_HEDERA
-                    ? 'Hedera pay-to account id is required'
-                    : 'EVM pay-to wallet address is required'
-            );
-        }
-
-        $keys = self::settings_keys_for_family($family);
         $platform = $client->get_platform_config();
         Ax402_WC_Platform_Config_Store::store($platform);
-        $accepted_token_ids = self::accepted_token_ids_for_family(
-            $family,
+        $recipients = self::recipient_config(
             $platform,
-            Ax402_WC_Settings::enabled_token_ids($platform)
+            Ax402_WC_Settings::enabled_token_ids($platform),
+            trim($settings['pay_to_address']),
+            trim($settings['pay_to_hedera_account_id'])
         );
-        if ($accepted_token_ids === []) {
-            throw new RuntimeException(
-                $family === self::FAMILY_HEDERA
-                    ? 'No Hedera settlement tokens available to scope the Hedera API'
-                    : 'No EVM settlement tokens available to scope the EVM API'
-            );
+
+        if ($recipients['accepted_token_ids'] === []) {
+            throw new RuntimeException('No settlement tokens available to scope the Ax402 API');
+        }
+        if ($recipients['has_evm'] && $recipients['evm_pay_to'] === '') {
+            throw new RuntimeException('EVM pay-to wallet address is required');
+        }
+        if ($recipients['has_hedera'] && $recipients['hedera_pay_to'] === '') {
+            throw new RuntimeException('Hedera pay-to account id is required');
+        }
+        if ($recipients['pay_to_address'] === '') {
+            throw new RuntimeException('A pay-to address is required');
         }
 
         $upstream = untrailingslashit(home_url());
-
-        $api_id = (string) $settings[$keys['api_id']];
-        $gateway_host = (string) $settings[$keys['gateway_host']];
-        $api_slug = (string) $settings[$keys['api_slug']];
+        $api_id = (string) $settings['api_id'];
+        $gateway_host = (string) $settings['gateway_host'];
+        $api_slug = (string) $settings['api_slug'];
 
         if ($api_id !== '') {
             try {
                 $api = $client->get_api($api_id);
-                $api = self::sync_accepted_tokens($client, $api, $accepted_token_ids);
-                $api = self::sync_upstream($client, $api, $upstream);
-                $api = self::sync_pay_to($client, $api, $pay_to);
+                $api = self::sync_api($client, $api, $recipients, $upstream);
                 $host = $gateway_host !== ''
                     ? $gateway_host
                     : self::primary_hostname($api, $api_slug, $platform, $settings['network_mode']);
 
-                $result = [
-                    'api_id' => (string) $api['id'],
-                    'gateway_host' => $host,
-                    'gateway_url' => Ax402_WC_Platform_Tokens::gateway_base_url($host, $platform),
-                    'api' => $api,
-                    'family' => $family,
-                ];
-                Ax402_WC_Gateway_Cors::ensure_store_origins($result['api_id'], $client);
-                return $result;
+                return self::onboarded_result($api, $host, $platform, $client);
             } catch (RuntimeException $e) {
                 if (stripos($e->getMessage(), 'api not found') === false) {
                     throw $e;
                 }
                 Ax402_WC_Settings::update([
-                    $keys['api_id'] => '',
-                    $keys['gateway_host'] => '',
+                    'api_id' => '',
+                    'gateway_host' => '',
                 ]);
                 $settings = Ax402_WC_Settings::all();
-                $api_slug = (string) $settings[$keys['api_slug']];
+                $api_slug = (string) $settings['api_slug'];
             }
         }
 
-        $slug = $api_slug !== ''
-            ? $api_slug
-            : self::default_slug_for_family($family);
+        $slug = $api_slug !== '' ? $api_slug : self::default_slug();
 
         try {
             $api = $client->create_api(
-                self::api_display_name($family),
+                self::api_display_name(),
                 $slug,
                 $upstream,
-                $pay_to,
-                $accepted_token_ids,
-                false
+                $recipients['pay_to_address'],
+                $recipients['accepted_token_ids'],
+                false,
+                $recipients['pay_to_addresses'] !== [] ? $recipients['pay_to_addresses'] : null
             );
         } catch (RuntimeException $e) {
             if (stripos($e->getMessage(), 'slug already exists') === false) {
@@ -145,32 +92,147 @@ final class Ax402_WC_Store_Onboarding
             if ($api === null) {
                 throw $e;
             }
-            $api = self::sync_accepted_tokens($client, $api, $accepted_token_ids);
-            $api = self::sync_upstream($client, $api, $upstream);
-            $api = self::sync_pay_to($client, $api, $pay_to);
+            $api = self::sync_api($client, $api, $recipients, $upstream);
         }
 
         $host = self::primary_hostname($api, $slug, $platform, $settings['network_mode']);
 
         Ax402_WC_Settings::update([
-            $keys['api_id'] => (string) $api['id'],
-            $keys['api_slug'] => $slug,
-            $keys['gateway_host'] => $host,
+            'api_id' => (string) $api['id'],
+            'api_slug' => $slug,
+            'gateway_host' => $host,
         ]);
 
-        $result = [
-            'api_id' => (string) $api['id'],
-            'gateway_host' => $host,
-            'gateway_url' => Ax402_WC_Platform_Tokens::gateway_base_url($host, $platform),
-            'api' => $api,
-            'family' => $family,
-        ];
-        Ax402_WC_Gateway_Cors::ensure_store_origins($result['api_id'], $client);
-        return $result;
+        return self::onboarded_result($api, $host, $platform, $client);
     }
 
     /**
-     * Platform token ids belonging to one chain family (merchant selection, else all).
+     * @deprecated Dual APIs are no longer required. Delegates to {@see ensure_api()}.
+     * @return array{api_id:string,gateway_host:string,gateway_url:string,api:array<string,mixed>,family:string}
+     */
+    public static function ensure_hedera_api(?Ax402_WC_Control_Plane_Client $client = null): array
+    {
+        return self::ensure_api($client);
+    }
+
+    /**
+     * @deprecated Dual APIs are no longer required. Delegates to {@see ensure_api()}.
+     * @return array{api_id:string,gateway_host:string,gateway_url:string,api:array<string,mixed>,family:string}
+     */
+    public static function ensure_api_for_network(
+        string $network,
+        ?Ax402_WC_Control_Plane_Client $client = null
+    ): array {
+        unset($network);
+
+        return self::ensure_api($client);
+    }
+
+    /**
+     * @deprecated Dual APIs are no longer required. Delegates to {@see ensure_api()}.
+     * @return array{api_id:string,gateway_host:string,gateway_url:string,api:array<string,mixed>,family:string}
+     */
+    public static function ensure_api_for_family(
+        string $family,
+        ?Ax402_WC_Control_Plane_Client $client = null
+    ): array {
+        unset($family);
+
+        return self::ensure_api($client);
+    }
+
+    /**
+     * Recipients + token scope for one store API.
+     *
+     * @param array<string, mixed> $platform
+     * @param list<string> $enabled_token_ids
+     * @return array{
+     *   accepted_token_ids:list<string>,
+     *   pay_to_address:string,
+     *   pay_to_addresses:array<string,string>,
+     *   has_evm:bool,
+     *   has_hedera:bool,
+     *   evm_pay_to:string,
+     *   hedera_pay_to:string
+     * }
+     */
+    public static function recipient_config(
+        array $platform,
+        array $enabled_token_ids,
+        string $evm_pay_to,
+        string $hedera_pay_to
+    ): array {
+        $ids = self::accepted_token_ids($platform, $enabled_token_ids);
+        $has_evm = false;
+        $has_hedera = false;
+        $hedera_networks = [];
+
+        foreach ($ids as $token_id) {
+            $token = Ax402_WC_Platform_Tokens::find_token_by_id($platform, $token_id);
+            if ($token === null) {
+                continue;
+            }
+            $network = (string) ($token['network'] ?? '');
+            if (Ax402_WC_Platform_Tokens::is_hedera_network($network)) {
+                $has_hedera = true;
+                if ($network !== '') {
+                    $hedera_networks[$network] = true;
+                }
+            } else {
+                $has_evm = true;
+            }
+        }
+
+        $pay_to_addresses = [];
+        if ($has_hedera && $hedera_pay_to !== '') {
+            foreach (array_keys($hedera_networks) as $network) {
+                $pay_to_addresses[$network] = $hedera_pay_to;
+            }
+        }
+
+        $pay_to_address = $has_evm ? $evm_pay_to : $hedera_pay_to;
+
+        return [
+            'accepted_token_ids' => $ids,
+            'pay_to_address' => $pay_to_address,
+            'pay_to_addresses' => $pay_to_addresses,
+            'has_evm' => $has_evm,
+            'has_hedera' => $has_hedera,
+            'evm_pay_to' => $evm_pay_to,
+            'hedera_pay_to' => $hedera_pay_to,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $platform
+     * @param list<string> $enabled_token_ids
+     * @return list<string>
+     */
+    public static function accepted_token_ids(array $platform, array $enabled_token_ids): array
+    {
+        $ids = [];
+        foreach ($enabled_token_ids as $token_id) {
+            $token = Ax402_WC_Platform_Tokens::find_token_by_id($platform, $token_id);
+            if ($token !== null && (string) ($token['id'] ?? '') !== '') {
+                $ids[] = (string) $token['id'];
+            }
+        }
+        if ($ids !== []) {
+            return array_values(array_unique($ids));
+        }
+
+        foreach (Ax402_WC_Platform_Tokens::enabled_tokens($platform) as $token) {
+            $token_id = (string) ($token['id'] ?? '');
+            if ($token_id !== '') {
+                $ids[] = $token_id;
+            }
+        }
+
+        return array_values(array_unique($ids));
+    }
+
+    /**
+     * @deprecated Use {@see accepted_token_ids()} — APIs are no longer family-scoped.
      *
      * @param array<string, mixed> $platform
      * @param list<string> $enabled_token_ids
@@ -183,25 +245,9 @@ final class Ax402_WC_Store_Onboarding
     ): array {
         $want_hedera = $family === self::FAMILY_HEDERA;
         $ids = [];
-
-        foreach ($enabled_token_ids as $token_id) {
+        foreach (self::accepted_token_ids($platform, $enabled_token_ids) as $token_id) {
             $token = Ax402_WC_Platform_Tokens::find_token_by_id($platform, $token_id);
             if ($token === null) {
-                continue;
-            }
-            $is_hedera = Ax402_WC_Platform_Tokens::is_hedera_network((string) ($token['network'] ?? ''));
-            if ($is_hedera === $want_hedera) {
-                $ids[] = $token_id;
-            }
-        }
-
-        if ($ids !== []) {
-            return array_values(array_unique($ids));
-        }
-
-        foreach (Ax402_WC_Platform_Tokens::enabled_tokens($platform) as $token) {
-            $token_id = (string) ($token['id'] ?? '');
-            if ($token_id === '') {
                 continue;
             }
             $is_hedera = Ax402_WC_Platform_Tokens::is_hedera_network((string) ($token['network'] ?? ''));
@@ -233,18 +279,64 @@ final class Ax402_WC_Store_Onboarding
         ];
     }
 
-    private static function default_slug_for_family(string $family): string
-    {
-        $base = 'wc-' . substr(hash('sha256', home_url()), 0, 10);
-        return $family === self::FAMILY_HEDERA ? $base . '-hedera' : $base;
+    /**
+     * @param array<string, mixed> $api
+     * @param array{
+     *   accepted_token_ids:list<string>,
+     *   pay_to_address:string,
+     *   pay_to_addresses:array<string,string>
+     * } $recipients
+     * @return array<string, mixed>
+     */
+    private static function sync_api(
+        Ax402_WC_Control_Plane_Client $client,
+        array $api,
+        array $recipients,
+        string $upstream
+    ): array {
+        // Recipients first: adding Hedera token ids without pay_to_addresses
+        // fails with "hedera:…: payTo: invalid Hedera account id".
+        $api = self::sync_pay_to(
+            $client,
+            $api,
+            $recipients['pay_to_address'],
+            $recipients['pay_to_addresses']
+        );
+        $api = self::sync_accepted_tokens($client, $api, $recipients['accepted_token_ids']);
+
+        return self::sync_upstream($client, $api, $upstream);
     }
 
-    private static function api_display_name(string $family): string
+    /**
+     * @param array<string, mixed> $api
+     * @return array{api_id:string,gateway_host:string,gateway_url:string,api:array<string,mixed>,family:string}
+     */
+    private static function onboarded_result(
+        array $api,
+        string $host,
+        array $platform,
+        Ax402_WC_Control_Plane_Client $client
+    ): array {
+        $result = [
+            'api_id' => (string) $api['id'],
+            'gateway_host' => $host,
+            'gateway_url' => Ax402_WC_Platform_Tokens::gateway_base_url($host, $platform),
+            'api' => $api,
+            'family' => self::FAMILY_EVM,
+        ];
+        Ax402_WC_Gateway_Cors::ensure_store_origins($result['api_id'], $client);
+
+        return $result;
+    }
+
+    private static function default_slug(): string
     {
-        $name = get_bloginfo('name') ?: 'WooCommerce Store';
-        return $family === self::FAMILY_HEDERA
-            ? $name . ' (Hedera)'
-            : $name;
+        return 'wc-' . substr(hash('sha256', home_url()), 0, 10);
+    }
+
+    private static function api_display_name(): string
+    {
+        return get_bloginfo('name') ?: 'WooCommerce Store';
     }
 
     /**
@@ -309,27 +401,60 @@ final class Ax402_WC_Store_Onboarding
 
     /**
      * @param array<string, mixed> $api
+     * @param array<string, string> $pay_to_addresses
      * @return array<string, mixed>
      */
     private static function sync_pay_to(
         Ax402_WC_Control_Plane_Client $client,
         array $api,
-        string $pay_to
+        string $pay_to,
+        array $pay_to_addresses
     ): array {
         $api_id = (string) ($api['id'] ?? '');
         if ($api_id === '' || $pay_to === '') {
             return $api;
         }
 
-        $current = (string) ($api['pay_to_address'] ?? '');
-        if (strcasecmp($current, $pay_to) === 0) {
+        $wanted_map = [];
+        foreach ($pay_to_addresses as $network => $address) {
+            $network = trim((string) $network);
+            $address = trim((string) $address);
+            if ($network !== '' && $address !== '') {
+                $wanted_map[$network] = $address;
+            }
+        }
+        ksort($wanted_map, SORT_STRING);
+
+        $current_map = [];
+        $raw_map = $api['pay_to_addresses'] ?? null;
+        if (is_array($raw_map)) {
+            foreach ($raw_map as $network => $address) {
+                $network = trim((string) $network);
+                $address = trim((string) $address);
+                if ($network !== '' && $address !== '') {
+                    $current_map[$network] = $address;
+                }
+            }
+        }
+        ksort($current_map, SORT_STRING);
+
+        $current_address = (string) ($api['pay_to_address'] ?? '');
+        $address_same = strcasecmp($current_address, $pay_to) === 0;
+        $map_same = $current_map === $wanted_map;
+        if ($address_same && $map_same) {
             return $api;
         }
 
-        return $client->update_api($api_id, [
+        $body = [
             'pay_to_mode' => 'user_wallet',
             'pay_to_address' => $pay_to,
-        ]);
+        ];
+        if ($wanted_map !== [] || $current_map !== []) {
+            // Empty object clears a previous per-network map (not a merge).
+            $body['pay_to_addresses'] = $wanted_map;
+        }
+
+        return $client->update_api($api_id, $body);
     }
 
     /**

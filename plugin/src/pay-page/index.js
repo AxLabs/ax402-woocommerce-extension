@@ -650,7 +650,9 @@ function PayApp() {
 	const [ selectedId, setSelectedId ] = useState(
 		() => options[ 0 ]?.tokenId || ''
 	);
-	const [ endpointReady, setEndpointReady ] = useState( false );
+	const [ endpointReady, setEndpointReady ] = useState( () =>
+		Boolean( options[ 0 ]?.gatewayUrl || config.gatewayUrl )
+	);
 	const [ lockError, setLockError ] = useState( '' );
 	const [ activeGatewayUrl, setActiveGatewayUrl ] = useState(
 		() => options[ 0 ]?.gatewayUrl || config.gatewayUrl || ''
@@ -677,19 +679,16 @@ function PayApp() {
 			return undefined;
 		}
 
+		setActiveGatewayUrl( selected.gatewayUrl || config.gatewayUrl || '' );
+		setEndpointReady( Boolean( selected.gatewayUrl || config.gatewayUrl ) );
+		setLockError( '' );
+
 		const url = config.selectSettlementUrl;
 		if ( ! url ) {
-			setActiveGatewayUrl(
-				selected.gatewayUrl || config.gatewayUrl || ''
-			);
-			setEndpointReady( true );
-			setLockError( '' );
 			return undefined;
 		}
 
 		let cancelled = false;
-		setEndpointReady( false );
-		setLockError( '' );
 
 		( async () => {
 			try {
@@ -710,17 +709,15 @@ function PayApp() {
 						`Could not lock settlement (${ res.status })`;
 					throw new Error( msg );
 				}
-				if ( ! cancelled ) {
-					setActiveGatewayUrl(
-						data?.gateway_url ||
-							selected.gatewayUrl ||
-							config.gatewayUrl ||
-							''
-					);
-					setEndpointReady( true );
+				if ( ! cancelled && data?.gateway_url ) {
+					setActiveGatewayUrl( data.gateway_url );
 				}
 			} catch ( e ) {
-				if ( ! cancelled ) {
+				if (
+					! cancelled &&
+					! selected.gatewayUrl &&
+					! config.gatewayUrl
+				) {
 					setEndpointReady( false );
 					setLockError(
 						e?.message ||

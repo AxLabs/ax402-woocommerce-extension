@@ -19,10 +19,12 @@ UCP protocol rules (cents, discovery shape, leak scanner, asset matching, MCP Pa
 ```bash
 export AX402_API_KEY=ax402_live_...
 export AX402_PAY_TO_ADDRESS=0x...
+export AX402_PAY_TO_HEDERA_ACCOUNT_ID=0.0.x   # optional; enables mixed-family API check
 npm run test:live-cp
 ```
 
 Creates and deletes a temporary API + endpoint against `https://api.ax402.io`.
+Also covers mixed EVM+Hedera `pay_to_addresses` (when `AX402_PAY_TO_HEDERA_ACCOUNT_ID` is set) and a USDC+ZCHF multi-accept 402 amount check.
 The CRUD smoke uses Base mainnet USDC accepts when the seller account cannot yet price `eip155:845320402` assets.
 
 ## E2E payments

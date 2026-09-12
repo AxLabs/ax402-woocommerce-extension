@@ -196,7 +196,7 @@ npm run env:stop
 | No payment methods | Same as `is_available=no` |
 | Fulfill never completes | Tunnel down, or `WP_HOME` / Ax402 upstream mismatch — re-run `npm run env:e2e` with `WP_BASE_URL`. Free ngrok: endpoints must include `upstream_auth` `ngrok-skip-browser-warning` (plugin sets this when the store host contains `ngrok`; place a new order or re-lock settlement after updating). Hedera: fulfill ACKs 200 before USDC; Woo marks paid from the settlement row (order note: reconcile or fulfill upstream). |
 | Order paid but note says reconcile | Normal when Ax402 GETs fulfill before writing the ledger. Also happens if fulfill never reached the shop (tunnel). |
-| ZCHF (or FX token) amount looks like USD atomics | Settlement select must resolve the **per-token** endpoint before pay (`POST …/settlement`). Pay page does this automatically. |
+| ZCHF (or FX token) amount looks like USD atomics | Gateway 402 should preserve each accept’s atomic amount. If an old order still has per-token endpoints, re-place the order so prep writes one multi-accept endpoint. |
 | Sepolia endpoint errors | Seller missing Sepolia USDC asset → try `AX402_NETWORK=mainnet` |
 | `test:e2e-pay` missing env | Set `WP_BASE_URL` and `AX402_EVM_PRIVATE_KEY` |
 

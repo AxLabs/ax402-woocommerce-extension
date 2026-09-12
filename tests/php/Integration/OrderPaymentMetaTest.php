@@ -49,6 +49,6 @@ final class OrderPaymentMetaTest extends TestCase
         $this->assertCount(2, $accepts);
         $this->assertSame('22500000', $accepts[0]['amount']);
         $this->assertSame('22500000', $accepts[1]['amount']);
-        $this->assertStringContainsString('/fulfill/wc_order_demo/aabbccdd', $path);
+        $this->assertSame('/wp-json/ax402/v1/fulfill/wc_order_demo/aabbccdd', $path);
     }
 }

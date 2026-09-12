@@ -4,10 +4,9 @@ declare(strict_types=1);
 defined('ABSPATH') || exit;
 
 /**
- * Creates / updates per-order Ax402 payment endpoints.
+ * Creates / updates the per-order Ax402 payment endpoint.
  *
- * Each settlement token gets its own temporary endpoint (single accept) so the
- * gateway never co-lists currencies on one path.
+ * One temporary endpoint holds every priced settlement token in accepts[].
  */
 final class Ax402_WC_Order_Payment
 {
@@ -21,6 +20,9 @@ final class Ax402_WC_Order_Payment
     public const META_PATH = '_ax402_path_pattern';
     public const META_SETTLEMENT_OPTIONS = '_ax402_settlement_options';
     public const META_SELECTED_TOKEN_ID = '_ax402_selected_token_id';
+
+    /** Control-plane TTL for ephemeral order endpoints (seconds). */
+    public const ENDPOINT_TTL_SECONDS = 21600;
 
     /**
      * Prepare Ax402 payment for a WooCommerce order.
@@ -59,7 +61,6 @@ final class Ax402_WC_Order_Payment
 
         $amount_usd = Ax402_WC_Money::normalize_order_total($order->get_total());
         $token_ids = Ax402_WC_Settings::enabled_token_ids($platform);
-        Ax402_WC_Control_Plane_Exchange_Rates::clear_cache_for_base_url($settings['base_url']);
         $options = Ax402_WC_Platform_Tokens::build_settlement_options(
             $platform,
             $token_ids,
@@ -73,26 +74,8 @@ final class Ax402_WC_Order_Payment
             );
         }
 
-        self::delete_endpoint_ids_for_order($order, $client);
-
-        $fulfill_token = (string) $order->get_meta(self::META_FULFILL_TOKEN);
-        if ($fulfill_token === '') {
-            $fulfill_token = bin2hex(random_bytes(16));
-        }
-
-        $order_key = $order->get_order_key();
-        /** @var array<string, array{api_id:string,gateway_host:string,gateway_url:string,api:array<string,mixed>,family:string}> $api_by_family */
-        $api_by_family = [];
-        $upstream_auth = null;
-
-        $display_options = [];
         foreach ($options as $option) {
-            $token_id = (string) $option['token_id'];
             $network = (string) $option['network'];
-            $symbol = (string) $option['symbol'];
-            $slug = self::token_path_slug($token_id);
-            $path = self::fulfill_path($order_key, $fulfill_token, $slug);
-
             $pay_to = Ax402_WC_Settings::pay_to_for_network($network);
             if ($pay_to === '') {
                 throw new RuntimeException(
@@ -101,47 +84,68 @@ final class Ax402_WC_Order_Payment
                         : 'EVM pay-to wallet address is required for EVM settlement tokens.'
                 );
             }
+        }
 
-            $family = Ax402_WC_Platform_Tokens::is_hedera_network($network)
-                ? Ax402_WC_Store_Onboarding::FAMILY_HEDERA
-                : Ax402_WC_Store_Onboarding::FAMILY_EVM;
-            if (!isset($api_by_family[$family])) {
-                $api_by_family[$family] = Ax402_WC_Store_Onboarding::ensure_api_for_family(
-                    $family,
-                    $client
-                );
+        $previous_endpoint_ids = self::endpoint_ids_from_order($order);
+
+        $fulfill_token = (string) $order->get_meta(self::META_FULFILL_TOKEN);
+        if ($fulfill_token === '') {
+            $fulfill_token = bin2hex(random_bytes(16));
+        }
+
+        $order_key = $order->get_order_key();
+        $onboarded = Ax402_WC_Store_Onboarding::ensure_api($client);
+        $upstream_auth = Ax402_WC_Control_Plane_Client::upstream_auth_for_base_url(
+            (string) ($onboarded['api']['upstream_base_url'] ?? home_url())
+        );
+        $path = self::fulfill_path($order_key, $fulfill_token);
+        $accepts = [];
+        foreach ($options as $option) {
+            if (is_array($option['accept'] ?? null)) {
+                $accepts[] = $option['accept'];
             }
-            $onboarded = $api_by_family[$family];
+        }
+        if ($accepts === []) {
+            throw new RuntimeException('No settlement accepts could be built for this order');
+        }
 
-            if ($upstream_auth === null) {
-                $upstream_auth = Ax402_WC_Control_Plane_Client::upstream_auth_for_base_url(
-                    (string) ($onboarded['api']['upstream_base_url'] ?? home_url())
-                );
-            }
+        $existing_id = (string) $order->get_meta(self::META_ENDPOINT_ID);
+        $endpoint = $client->upsert_endpoint(
+            $onboarded['api_id'],
+            'GET',
+            $path,
+            $accepts,
+            'WooCommerce order #' . $order->get_id(),
+            $upstream_auth,
+            $existing_id,
+            self::ENDPOINT_TTL_SECONDS
+        );
+        $endpoint_id = (string) ($endpoint['id'] ?? '');
+        $gateway_url = Ax402_WC_Platform_Tokens::gateway_url(
+            $onboarded['gateway_host'],
+            $path,
+            $platform
+        );
 
-            $endpoint = $client->upsert_endpoint(
-                $onboarded['api_id'],
-                'GET',
-                $path,
-                [$option['accept']],
-                'WooCommerce order #' . $order->get_id() . ' (' . $symbol . ')',
-                $upstream_auth
-            );
-
-            $gateway_url = Ax402_WC_Platform_Tokens::gateway_url(
-                $onboarded['gateway_host'],
-                $path,
-                $platform
-            );
-
+        $display_options = [];
+        foreach ($options as $option) {
+            $token_id = (string) $option['token_id'];
             $display_options[] = self::option_for_meta($option, [
                 'apiId' => $onboarded['api_id'],
-                'endpointId' => (string) ($endpoint['id'] ?? ''),
+                'endpointId' => $endpoint_id,
                 'gatewayUrl' => $gateway_url,
                 'path' => $path,
-                'tokenSlug' => $slug,
+                'tokenSlug' => self::token_path_slug($token_id),
             ]);
         }
+
+        self::delete_stale_endpoint_ids(
+            $order,
+            $client,
+            $previous_endpoint_ids,
+            $endpoint_id,
+            $onboarded['api_id']
+        );
 
         $primary = $display_options[0];
         $order->update_meta_data(self::META_FULFILL_TOKEN, $fulfill_token);
@@ -190,8 +194,8 @@ final class Ax402_WC_Order_Payment
         }
 
         $note = sprintf(
-            /* translators: 1: USD amount 2: token symbols 3: endpoint count */
-            __('Ax402 payment prepared for %1$s USD (%2$s) across %3$d temporary endpoint(s).', 'ax402-for-woocommerce'),
+            /* translators: 1: USD amount 2: token symbols 3: accept count */
+            __('Ax402 payment prepared for %1$s USD (%2$s) on 1 temporary endpoint (%3$d accept(s)).', 'ax402-for-woocommerce'),
             $amount_usd,
             $symbols,
             count($display_options)
@@ -233,8 +237,6 @@ final class Ax402_WC_Order_Payment
         if ($client === null) {
             return;
         }
-
-        Ax402_WC_Control_Plane_Exchange_Rates::clear_cache_for_base_url($settings['base_url']);
 
         try {
             $platform = $client->get_platform_config();
@@ -281,7 +283,7 @@ final class Ax402_WC_Order_Payment
     }
 
     /**
-     * Select the pre-created per-token endpoint for the shopper’s settlement choice.
+     * Remember the shopper’s settlement token (shared endpoint URL does not change).
      *
      * @return array{
      *   token_id:string,
@@ -350,6 +352,18 @@ final class Ax402_WC_Order_Payment
         $endpoint_id = (string) ($selected['endpointId'] ?? '');
         $gateway_url = (string) ($selected['gatewayUrl'] ?? '');
         $path = (string) ($selected['path'] ?? '');
+        $primary_endpoint = (string) $order->get_meta(self::META_ENDPOINT_ID);
+        $primary_gateway = (string) $order->get_meta(self::META_GATEWAY_URL);
+        $primary_path = (string) $order->get_meta(self::META_PATH);
+        if ($endpoint_id === '') {
+            $endpoint_id = $primary_endpoint;
+        }
+        if ($gateway_url === '') {
+            $gateway_url = $primary_gateway;
+        }
+        if ($path === '') {
+            $path = $primary_path;
+        }
         if ($endpoint_id === '' || $gateway_url === '') {
             self::prepare($order, $client);
             $options = self::settlement_options_from_order($order);
@@ -574,6 +588,42 @@ final class Ax402_WC_Order_Payment
         ?Ax402_WC_Control_Plane_Client $client = null
     ): void {
         self::delete_endpoint_ids_for_order($order, $client);
+    }
+
+    /**
+     * @param list<string> $previous_ids
+     */
+    private static function delete_stale_endpoint_ids(
+        WC_Order $order,
+        Ax402_WC_Control_Plane_Client $client,
+        array $previous_ids,
+        string $keep_id,
+        string $api_id
+    ): void {
+        $fallback_api_ids = Ax402_WC_Settings::configured_api_ids();
+        if ($api_id !== '') {
+            array_unshift($fallback_api_ids, $api_id);
+            $fallback_api_ids = array_values(array_unique($fallback_api_ids));
+        }
+        foreach ($previous_ids as $endpoint_id) {
+            if ($endpoint_id === '' || $endpoint_id === $keep_id) {
+                continue;
+            }
+            $deleted = false;
+            $last_error = '';
+            foreach ($fallback_api_ids as $candidate_api_id) {
+                try {
+                    $client->delete_endpoint($candidate_api_id, $endpoint_id);
+                    $deleted = true;
+                    break;
+                } catch (Throwable $e) {
+                    $last_error = $e->getMessage();
+                }
+            }
+            if (!$deleted && $last_error !== '') {
+                $order->add_order_note('Ax402 endpoint cleanup failed: ' . $last_error);
+            }
+        }
     }
 
     private static function delete_endpoint_ids_for_order(

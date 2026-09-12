@@ -62,25 +62,8 @@ if (\$cors['ok']) {
   echo \"cors sync warning: {\$cors['error']}\n\";
 }
 \$settings = Ax402_WC_Settings::all();
-if (\$settings['pay_to_hedera_account_id'] !== '') {
-  try {
-    \$hedera = Ax402_WC_Store_Onboarding::ensure_hedera_api(\$client);
-    \$h_api = \$hedera['api'];
-    \$h_current = rtrim((string) (\$h_api['upstream_base_url'] ?? ''), '/');
-    if (\$h_current !== rtrim(\$base, '/')) {
-      \$client->update_api(\$hedera['api_id'], ['upstream_base_url' => \$base]);
-      echo \"hedera upstream updated to {\$base}\n\";
-    } else {
-      echo \"hedera upstream already matches {\$base}\n\";
-    }
-    echo \"hedera_api_id={\$hedera['api_id']} hedera_gateway_host={\$hedera['gateway_host']}\n\";
-    \$h_cors = Ax402_WC_Gateway_Cors::ensure_store_origins(\$hedera['api_id'], \$client);
-    if (!\$h_cors['ok']) {
-      echo \"hedera cors sync warning: {\$h_cors['error']}\n\";
-    }
-  } catch (Throwable \$e) {
-    echo \"hedera onboard warning: \" . \$e->getMessage() . \"\n\";
-  }
+if (\$settings['hedera_api_id'] !== '') {
+  echo \"legacy hedera_api_id={\$settings['hedera_api_id']} (kept for in-flight orders; new payments use api_id)\n\";
 }
 "
 else

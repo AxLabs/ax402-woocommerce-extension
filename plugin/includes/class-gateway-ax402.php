@@ -672,11 +672,11 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
             }
 
             if (Ax402_WC_Settings::client() !== null) {
-                if ($needs_evm && $settings_now['pay_to_address'] !== '') {
+                $can_onboard = (!$needs_evm || $settings_now['pay_to_address'] !== '')
+                    && (!$needs_hedera || $settings_now['pay_to_hedera_account_id'] !== '')
+                    && ($needs_evm || $needs_hedera);
+                if ($can_onboard) {
                     Ax402_WC_Store_Onboarding::ensure_api();
-                }
-                if ($needs_hedera && $settings_now['pay_to_hedera_account_id'] !== '') {
-                    Ax402_WC_Store_Onboarding::ensure_hedera_api();
                 }
                 $cors = Ax402_WC_Gateway_Cors::status();
                 if ($cors['error'] !== '') {

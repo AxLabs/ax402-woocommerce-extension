@@ -119,8 +119,9 @@ final class Ax402_WC_Control_Plane_Client
     }
 
     /**
-     * @param list<string>|null $accepted_token_ids When set, scopes the API to these
-     *        platform token ids (required to avoid mixing eip155 + hedera on one API).
+     * @param list<string>|null $accepted_token_ids Platform token ids this API may price.
+     * @param array<string, string>|null $pay_to_addresses CAIP-2 network → recipient
+     *        (e.g. `{ "hedera:mainnet": "0.0.x" }`). Required when mixing EVM + Hedera.
      * @return array<string, mixed>
      */
     public function create_api(
@@ -130,6 +131,7 @@ final class Ax402_WC_Control_Plane_Client
         ?string $pay_to_address = null,
         ?array $accepted_token_ids = null,
         bool $accept_all_tokens = false,
+        ?array $pay_to_addresses = null,
     ): array {
         $body = [
             'name' => $name,
@@ -140,6 +142,17 @@ final class Ax402_WC_Control_Plane_Client
         if ($pay_to_address !== null && $pay_to_address !== '') {
             $body['pay_to_mode'] = 'user_wallet';
             $body['pay_to_address'] = $pay_to_address;
+        }
+        if ($pay_to_addresses !== null) {
+            $map = [];
+            foreach ($pay_to_addresses as $network => $address) {
+                $network = trim((string) $network);
+                $address = trim((string) $address);
+                if ($network !== '' && $address !== '') {
+                    $map[$network] = $address;
+                }
+            }
+            $body['pay_to_addresses'] = $map;
         }
         if ($accepted_token_ids !== null) {
             $body['accepted_token_ids'] = array_values(array_filter(array_map(
@@ -216,6 +229,7 @@ final class Ax402_WC_Control_Plane_Client
         array $accepts,
         ?string $description = null,
         ?array $upstream_auth = null,
+        ?int $ttl = null,
     ): array {
         $body = [
             'method' => strtoupper($method),
@@ -227,6 +241,9 @@ final class Ax402_WC_Control_Plane_Client
         }
         if ($upstream_auth !== null) {
             $body['upstream_auth'] = $upstream_auth;
+        }
+        if ($ttl !== null && $ttl > 0) {
+            $body['ttl'] = $ttl;
         }
 
         $result = $this->request('POST', '/apis/' . rawurlencode($api_id) . '/endpoints', $body);
@@ -395,6 +412,8 @@ final class Ax402_WC_Control_Plane_Client
     }
 
     /**
+     * Create or update an endpoint. Prefer `$endpoint_id` (PUT) over listing the API.
+     *
      * @param list<array<string, mixed>> $accepts
      * @param array{type:string,header?:string,value?:string}|null $upstream_auth
      * @return array<string, mixed>
@@ -406,9 +425,49 @@ final class Ax402_WC_Control_Plane_Client
         array $accepts,
         ?string $description = null,
         ?array $upstream_auth = null,
+        ?string $endpoint_id = null,
+        ?int $ttl = null,
     ): array {
-        $existing = self::find_endpoint_by_path($this->list_endpoints($api_id), $method, $path_pattern);
-        if ($existing !== null && !empty($existing['id'])) {
+        $endpoint_id = $endpoint_id !== null ? trim($endpoint_id) : '';
+        if ($endpoint_id !== '') {
+            try {
+                return $this->update_endpoint(
+                    $api_id,
+                    $endpoint_id,
+                    $method,
+                    $path_pattern,
+                    $accepts,
+                    true,
+                    $description,
+                    $upstream_auth
+                );
+            } catch (RuntimeException $e) {
+                if (stripos($e->getMessage(), 'not found') === false) {
+                    throw $e;
+                }
+            }
+        }
+
+        try {
+            return $this->create_endpoint(
+                $api_id,
+                $method,
+                $path_pattern,
+                $accepts,
+                $description,
+                $upstream_auth,
+                $ttl
+            );
+        } catch (RuntimeException $e) {
+            $existing = self::find_endpoint_by_path(
+                $this->list_endpoints($api_id),
+                $method,
+                $path_pattern
+            );
+            if ($existing === null || empty($existing['id'])) {
+                throw $e;
+            }
+
             return $this->update_endpoint(
                 $api_id,
                 (string) $existing['id'],
@@ -420,15 +479,6 @@ final class Ax402_WC_Control_Plane_Client
                 $upstream_auth
             );
         }
-
-        return $this->create_endpoint(
-            $api_id,
-            $method,
-            $path_pattern,
-            $accepts,
-            $description,
-            $upstream_auth
-        );
     }
 
     /**

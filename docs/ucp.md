@@ -53,7 +53,7 @@ Agent                         Shop UCP                         Ax402 gateway
   |                              |                                   |
   | POST .../complete            |                                   |
   |   (no payment)               |                                   |
-  |----------------------------->| GET locked token endpoint         |
+  |----------------------------->| GET order gateway URL             |
   |                              |   (no PAYMENT-SIGNATURE)          |
   |                              |---------------------------------->|
   |                              | 402 PAYMENT-REQUIRED              |

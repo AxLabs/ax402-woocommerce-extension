@@ -9,8 +9,8 @@ defined('ABSPATH') || exit;
  * API `rate` values are quote-currency prices per 1 token (USD per token from CoinGecko).
  * This provider converts them to tokens-per-1-USD for {@see Ax402_WC_Money::usd_to_token_amount()}.
  *
- * Fetch strategy: try "today", then calendar "yesterday"; if both are empty or error,
- * fall back to the closest previous business day (Mon–Fri).
+ * Fetch strategy: weekdays try "today", then yesterday (if a weekday), then the
+ * closest previous business day (Mon–Fri). Weekend calendar dates are skipped.
  */
 final class Ax402_WC_Control_Plane_Exchange_Rates implements Ax402_WC_Exchange_Rate_Provider
 {
@@ -93,22 +93,31 @@ final class Ax402_WC_Control_Plane_Exchange_Rates implements Ax402_WC_Exchange_R
     }
 
     /**
-     * Dates to try, newest first: today → yesterday → closest previous business day.
+     * Dates to try, newest first.
+     *
+     * Weekend calendar dates are skipped: `/exchange-rates` often returns
+     * `rates: []` after ~30s on Sat/Sun, then the previous business day has data.
+     * Weekdays still try today, then yesterday (if that is also a weekday), then
+     * the closest previous business day.
      *
      * @return list<string> YYYY-MM-DD in UTC
      */
     public static function candidate_rate_dates(\DateTimeImmutable $now): array
     {
         $today = $now->setTimezone(new \DateTimeZone('UTC'))->setTime(0, 0, 0);
-        $yesterday = $today->modify('-1 day');
-        $business = self::closest_previous_business_day($today);
-
         $dates = [];
-        foreach ([$today, $yesterday, $business] as $day) {
-            $formatted = $day->format('Y-m-d');
-            if (!in_array($formatted, $dates, true)) {
-                $dates[] = $formatted;
+        $iso = (int) $today->format('N');
+        if ($iso <= 5) {
+            $dates[] = $today->format('Y-m-d');
+            $yesterday = $today->modify('-1 day');
+            if ((int) $yesterday->format('N') <= 5) {
+                $dates[] = $yesterday->format('Y-m-d');
             }
+        }
+
+        $business = self::closest_previous_business_day($today)->format('Y-m-d');
+        if (!in_array($business, $dates, true)) {
+            $dates[] = $business;
         }
 
         return $dates;
