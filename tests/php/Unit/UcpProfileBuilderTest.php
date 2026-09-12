@@ -39,16 +39,27 @@ final class UcpProfileBuilderTest extends TestCase
         $this->assertSame('rest', $services['transport']);
         $this->assertSame('https://shop.example/wp-json/ucp/v1', $services['endpoint']);
         $this->assertSame(Ax402_WC_Ucp_Profile_Builder::UCP_VERSION, $profile['ucp']['version']);
-        $this->assertSame('2026-04-08', $profile['ucp']['version']);
+        $this->assertSame('2026-08-25', $profile['ucp']['version']);
         $mcp = $profile['ucp']['services']['dev.ucp.shopping'][1];
         $this->assertSame('mcp', $mcp['transport']);
         $this->assertSame('https://shop.example/wp-json/ucp/v1/mcp', $mcp['endpoint']);
-        $this->assertStringContainsString('2026-04-08', (string) $services['schema']);
-        $this->assertStringContainsString('2026-04-08', (string) $mcp['schema']);
+        $this->assertStringContainsString('2026-08-25', (string) $services['schema']);
+        $this->assertStringContainsString('2026-08-25', (string) $mcp['schema']);
         $this->assertArrayHasKey('dev.ucp.shopping.cart', $profile['ucp']['capabilities']);
+        $this->assertArrayHasKey('dev.ucp.shopping.catalog.lookup', $profile['ucp']['capabilities']);
         $this->assertArrayHasKey('dev.ucp.shopping.order', $profile['ucp']['capabilities']);
         $this->assertArrayNotHasKey('map_order', $profile['ucp']);
+        $this->assertArrayNotHasKey('supported_versions', $profile['ucp']);
         $this->assertIsArray($profile['ucp']['payment_handlers']['org.x402.payment']);
+        $search = $profile['ucp']['capabilities']['dev.ucp.shopping.catalog.search'][0];
+        $this->assertStringContainsString('/specification/shopping/catalog', (string) $search['spec']);
+        $checkout = $profile['ucp']['capabilities']['dev.ucp.shopping.checkout'][0];
+        $this->assertStringContainsString('/specification/shopping/checkout', (string) $checkout['spec']);
+        $fulfillment = $profile['ucp']['capabilities']['dev.ucp.shopping.fulfillment'][0];
+        $this->assertSame('dev.ucp.shopping.checkout', $fulfillment['extends']);
+        $this->assertStringContainsString('/specification/shopping/extensions/fulfillment', (string) $fulfillment['spec']);
+        $this->assertSame(Ax402_WC_Ucp_Profile_Builder::HANDLER_SCHEMA, $profile['ucp']['payment_handlers']['org.x402.payment'][0]['schema']);
+        $this->assertSame('2026-08-25', $profile['ucp']['payment_handlers']['org.x402.payment'][0]['version']);
     }
 
     public function test_handler_matches_binding_schema_rules(): void

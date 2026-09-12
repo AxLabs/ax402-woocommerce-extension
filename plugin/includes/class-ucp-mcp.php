@@ -6,11 +6,12 @@ defined('ABSPATH') || exit;
 /**
  * UCP shopping MCP: JSON-RPC 2.0 POST at /wp-json/ucp/v1/mcp.
  *
- * Official 2026-04-08 OpenRPC methods wrap the same catalog/cart/checkout/order
+ * Official 2026-08-25 OpenRPC methods wrap the same catalog/cart/checkout/order
  * classes as REST. Shopify UCP CLI 0.6.x negotiates MCP only. x402 payment on
  * this transport uses structured `payment_required` / `_meta["x402/payment"]`
- * (binding B3b, ideal-era retry). Adapter era: pay resource.url over HTTP,
- * then complete_checkout again. HTTP 402 headers stay for REST.
+ * (binding B3b, Same-URL retry). External-URL path: pay resource.url over HTTP,
+ * then complete_checkout again with a fresh meta["idempotency-key"]. HTTP 402
+ * headers stay for REST.
  */
 final class Ax402_WC_Ucp_Mcp
 {
@@ -216,6 +217,31 @@ final class Ax402_WC_Ucp_Mcp
                 'checkout' => $checkout_body,
             ],
         ];
+        $complete_meta = [
+            'type' => 'object',
+            'additionalProperties' => true,
+            'required' => ['idempotency-key'],
+            'properties' => [
+                'ucp-agent' => [
+                    'type' => 'object',
+                    'additionalProperties' => true,
+                    'properties' => [
+                        'profile' => ['type' => 'string'],
+                    ],
+                ],
+                'idempotency-key' => ['type' => 'string'],
+            ],
+        ];
+        $complete_by_id = [
+            'type' => 'object',
+            'required' => ['meta', 'id'],
+            'additionalProperties' => true,
+            'properties' => [
+                'meta' => $complete_meta,
+                'id' => ['type' => 'string', 'description' => 'Checkout session id (Woo order_key). CLI: positional, not in --input.'],
+                'checkout' => $checkout_body,
+            ],
+        ];
 
         $cart_create = [
             'type' => 'object',
@@ -264,8 +290,8 @@ final class Ax402_WC_Ucp_Mcp
                 $by_id,
             ],
             'complete_checkout' => [
-                'Place the order after x402 payment. Without settlement this returns a PaymentRequired challenge in structuredContent (x402Version, resource, accepts; also nested as payment_required) and does not settle. If resource.url equals the shop REST complete URL in links[] type org.x402.complete, retry this tool with PAYMENT-SIGNATURE, params._meta["x402/payment"], or checkout.payment.payment_signature. If resource.url differs, pay resource.url over HTTP with standard x402 (method from extensions.bazaar.info.input.method, typically GET), then call this tool again (no signature required) so the shop can reconcile. Never pay the MCP JSON-RPC URL. payment_required.accepts lists every prepared settlement token on that resource; GET checkout payment.instruments[] for display/preference. Optionally retry complete (or update_checkout first) with payment.instruments[{network,asset,selected:true}] to record a preference. Pay the challenge as-is; do not invent a network/asset that is absent from accepts. Then get_checkout / get_order. Spec: https://github.com/AxLabs/ucp-x402-binding',
-                $by_id,
+                'Place the order after x402 payment. Without settlement this returns a PaymentRequired challenge in structuredContent (x402Version, resource, accepts; also nested as payment_required) and does not settle. Same-URL: if resource.url equals the shop REST complete URL in links[] type org.x402.complete, retry this tool with PAYMENT-SIGNATURE, params._meta["x402/payment"], or checkout.payment.payment_signature. External-URL: if resource.url differs, pay resource.url over HTTP with standard x402 (method from extensions.bazaar.info.input.method, typically GET), then call this tool again with a fresh meta["idempotency-key"] (no signature required) so the shop can reconcile. Never pay the MCP JSON-RPC URL. payment_required.accepts lists every prepared settlement token on that resource; GET checkout payment.instruments[] for display/preference. Optionally retry complete (or update_checkout first) with payment.instruments[{network,asset,selected:true}] to record a preference. Pay the challenge as-is; do not invent a network/asset that is absent from accepts. Then get_checkout / get_order. Spec: https://github.com/AxLabs/ucp-x402-binding',
+                $complete_by_id,
             ],
             'cancel_checkout' => ['Cancel a checkout session.', $by_id],
             'get_order' => ['Get a placed order.', $order_by_id],
@@ -344,7 +370,7 @@ final class Ax402_WC_Ucp_Mcp
         $destination = [
             'type' => 'object',
             'additionalProperties' => true,
-            'description' => 'UCP 2026-04-08 postal address. Use street_address (not address_line_1) and address_country (not country).',
+            'description' => 'UCP 2026-08-25 postal address. Use street_address (not address_line_1) and address_country (not country).',
             'properties' => [
                 'id' => ['type' => 'string'],
                 'street_address' => ['type' => 'string'],
@@ -546,8 +572,26 @@ final class Ax402_WC_Ucp_Mcp
             }
         }
 
+        $inner = null;
+        if ($name === 'complete_checkout') {
+            $idempotency_key = Ax402_WC_Ucp_Complete_Idempotency::from_mcp_arguments($arguments);
+            if ($idempotency_key === '') {
+                $inner = Ax402_WC_Ucp_Response::rest_error(
+                    200,
+                    [Ax402_WC_Ucp_Response::message(
+                        'error',
+                        'invalid',
+                        'complete_checkout requires meta["idempotency-key"]. Use a fresh key for each complete attempt.',
+                        'recoverable'
+                    )]
+                );
+            } else {
+                $request->set_header('Idempotency-Key', $idempotency_key);
+            }
+        }
+
         $parts = self::call_parts($name, $arguments);
-        $inner = $this->dispatch($name, $parts['id'], $parts['body'], $request);
+        $inner ??= $this->dispatch($name, $parts['id'], $parts['body'], $request);
         if ($inner instanceof WP_Error) {
             return new WP_REST_Response(self::rpc_error(
                 $id,

@@ -81,6 +81,61 @@ if (!function_exists('__')) {
     }
 }
 
+if (!class_exists('WP_REST_Response')) {
+    /**
+     * Minimal stub for unit tests that snapshot complete responses.
+     */
+    class WP_REST_Response
+    {
+        /** @var mixed */
+        public $data;
+
+        public int $status;
+
+        /** @var array<string, string> */
+        public array $headers = [];
+
+        /**
+         * @param mixed $data
+         */
+        public function __construct($data = null, int $status = 200)
+        {
+            $this->data = $data;
+            $this->status = $status;
+        }
+
+        /**
+         * @return mixed
+         */
+        public function get_data()
+        {
+            return $this->data;
+        }
+
+        public function get_status(): int
+        {
+            return $this->status;
+        }
+
+        /**
+         * @return array<string, string>
+         */
+        public function get_headers(): array
+        {
+            return $this->headers;
+        }
+
+        public function header(string $key, string $value, bool $replace = true): void
+        {
+            if ($replace || !isset($this->headers[$key])) {
+                $this->headers[$key] = $value;
+                return;
+            }
+            $this->headers[$key] .= ', ' . $value;
+        }
+    }
+}
+
 require_once $plugin . '/includes/class-money.php';
 require_once $plugin . '/includes/class-platform-tokens.php';
 require_once $plugin . '/includes/class-control-plane-client.php';

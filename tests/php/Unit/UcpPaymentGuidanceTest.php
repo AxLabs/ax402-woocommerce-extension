@@ -67,6 +67,8 @@ final class UcpPaymentGuidanceTest extends TestCase
         $this->assertStringContainsString('reconcile', $complete['description']);
         $this->assertStringContainsString('payment.instruments', $complete['description']);
         $this->assertStringContainsString('github.com/AxLabs/ucp-x402-binding', $complete['description']);
+        $this->assertStringContainsString('idempotency-key', $complete['description']);
+        $this->assertSame(['idempotency-key'], $complete['inputSchema']['properties']['meta']['required'] ?? null);
         $this->assertStringNotContainsString('Do not POST payment_required.resource.url', $complete['description']);
         $this->assertStringNotContainsString('saw', strtolower($complete['description']));
     }

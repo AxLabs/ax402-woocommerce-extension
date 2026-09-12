@@ -7,7 +7,7 @@ defined('ABSPATH') || exit;
  * Woo shipping / local pickup ↔ UCP fulfillment.
  *
  * Checkout `fulfillment.methods[].type` is only `shipping` | `pickup` (UCP
- * 2026-04-08). Virtual/downloadable Woo products are digital goods: they are
+ * 2026-08-25). Virtual/downloadable Woo products are digital goods: they are
  * omitted from checkout methods. `digital` is used on order expectations.
  */
 final class Ax402_WC_Ucp_Fulfillment

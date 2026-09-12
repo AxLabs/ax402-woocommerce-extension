@@ -13,7 +13,7 @@ UCP for agents: [ucp.md](ucp.md). x402 on UCP: [ucp-x402-binding](https://github
 4. **Woo fulfill REST** — `GET /wp-json/ax402/v1/fulfill/{order_key}/{fulfill_token}` ACKs the x402 resource (HTTP 200). It calls `payment_complete()` only when Ax402 already has a matching settlement.
 5. **Human pay page** — storefront page mounting `@ax402/react-paywall` against the gateway URL.
 6. **Agent REST** — catalog + create order + status (+ settlement lock) under `/wp-json/ax402/v1/*`.
-7. **UCP for agents (opt-in)** — `/.well-known/ucp` + `/wp-json/ucp/v1` catalog, cart, checkout, order (REST) and `/wp-json/ucp/v1/mcp` (MCP JSON-RPC). Protocol **2026-04-08**. REST 402 at complete; MCP `complete_checkout` carries PaymentRequired on `structuredContent`. Agents pay `resource.url` (Ax402 gateway) then complete again; the plugin does **not** proxy signatures. Human pay page unchanged. See [ucp.md](ucp.md) and [ucp-x402-binding](https://github.com/AxLabs/ucp-x402-binding).
+7. **UCP for agents (opt-in)** — `/.well-known/ucp` + `/wp-json/ucp/v1` catalog, cart, checkout, order (REST) and `/wp-json/ucp/v1/mcp` (MCP JSON-RPC). Protocol **2026-08-25**. REST 402 at complete; MCP `complete_checkout` carries PaymentRequired on `structuredContent`. Agents pay `resource.url` (Ax402 gateway) then complete again; the plugin does **not** proxy signatures. Human pay page unchanged. See [ucp.md](ucp.md) and [ucp-x402-binding](https://github.com/AxLabs/ucp-x402-binding).
 8. **Settlement reconcile** — status polls mark the order paid from a matching control-plane settlement. Required when Ax402 GETs fulfill **before** writing the ledger (Hedera); also covers missing fulfill (tunnels).
 
 ## Payment flow (human)

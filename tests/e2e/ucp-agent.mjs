@@ -11,9 +11,9 @@
  * - E2E_UCP_PHYSICAL=1  use ax402-ship-box + a US shipping address
  * - E2E_UCP_TRANSPORT=rest  pay via REST complete instead of MCP
  *
- * Adapter era: pay payment_required.resource.url (Ax402 gateway) with standard
- * x402, then POST complete again with no signature. The shop must not replay
- * PAYMENT-SIGNATURE. See docs/ucp.md.
+ * External-URL: pay payment_required.resource.url (Ax402 gateway) with standard
+ * x402, then POST complete again with no signature (fresh Idempotency-Key).
+ * The shop must not replay PAYMENT-SIGNATURE. See docs/ucp.md.
  */
 import { buyerClientFromEnv } from '@ax402/sdk/buyer';
 

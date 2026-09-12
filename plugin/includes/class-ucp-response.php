@@ -10,6 +10,9 @@ final class Ax402_WC_Ucp_Response
 {
     public const HANDLER_SPEC = 'https://github.com/AxLabs/ucp-x402-binding';
     public const LINK_X402_COMPLETE = 'org.x402.complete';
+    public const ACTION_PAYMENT_CHALLENGE = 'org.x402.payment.challenge';
+    public const ACTION_PAYMENT_CHALLENGE_ID = 'act_payment_challenge';
+    public const PAYMENT_CHALLENGE_INSTRUCTIONS = 'Payment required. POST this session\'s complete URL to receive the x402 v2 challenge; the signed challenge carries the payment resource, accepted assets, and HTTP method. Pay the resource it names, then POST complete again.';
 
     /**
      * @param array<string, mixed> $extra
@@ -20,11 +23,12 @@ final class Ax402_WC_Ucp_Response
         $ucp = [
             'version' => Ax402_WC_Ucp_Profile_Builder::UCP_VERSION,
             'capabilities' => [
-                $capability => [[
-                    'version' => Ax402_WC_Ucp_Profile_Builder::UCP_VERSION,
-                ]],
+                $capability => [Ax402_WC_Ucp_Profile_Builder::capability_ref($capability)],
             ],
         ];
+        if ($capability === Ax402_WC_Ucp_Profile_Builder::CAP_CHECKOUT) {
+            $ucp['payment_handlers'] = self::session_payment_handlers();
+        }
 
         return array_merge($ucp, $extra);
     }
@@ -56,8 +60,8 @@ final class Ax402_WC_Ucp_Response
         $url = self::checkout_complete_url($session_id);
         $content = 'Payment required (org.x402.payment). This checkout is ready; complete without settlement does not place the order. '
             . 'POST ' . $url . ' issues HTTP 402 / PAYMENT-REQUIRED (MCP: PaymentRequired in structuredContent, also nested as payment_required; JSON-RPC stays HTTP 200). '
-            . 'Apply the binding derivation rule: if payment_required.resource.url equals this complete URL, retry this URL with PAYMENT-SIGNATURE (or JSON payment.payment_signature / payment.payment_signature_data, or MCP params._meta["x402/payment"]). '
-            . 'If resource.url differs (adapter: Ax402 gateway inside the signed challenge), pay resource.url with standard x402 using the HTTP method from extensions.bazaar.info.input.method (typically GET; do not assume POST), then POST this complete URL again (empty body or the same instrument selection) so the shop can reconcile. The shop will not relay PAYMENT-SIGNATURE to the gateway. Never pay the MCP JSON-RPC URL. '
+            . 'Apply the binding derivation rule: if payment_required.resource.url equals this complete URL (Same-URL path), retry this URL with PAYMENT-SIGNATURE (or JSON payment.payment_signature / payment.payment_signature_data, or MCP params._meta["x402/payment"]). '
+            . 'If resource.url differs (External-URL path: Ax402 gateway inside the signed challenge), pay resource.url with standard x402 using the HTTP method from extensions.bazaar.info.input.method (typically GET; do not assume POST), then POST this complete URL again with a fresh Idempotency-Key (empty body or the same instrument selection) so the shop can reconcile. The shop will not relay PAYMENT-SIGNATURE to the gateway. Never pay the MCP JSON-RPC URL. '
             . 'payment_required.accepts lists every prepared settlement token for this order on that resource. '
             . 'See payment.instruments[] for display names and an optional preference. '
             . 'Do not pay this challenge with a network or asset that is absent from payment_required.accepts. '
@@ -66,6 +70,27 @@ final class Ax402_WC_Ucp_Response
             . 'Binding: ' . self::HANDLER_SPEC;
 
         return self::message($type, 'payment_required', $content, 'recoverable');
+    }
+
+    /**
+     * Advisory Action for pending checkout. Text only: no payment coordinates.
+     *
+     * @return array<string, list<array<string, mixed>>>
+     */
+    public static function payment_challenge_actions(string $status): array
+    {
+        if ($status !== Ax402_WC_Ucp_Status::READY) {
+            return [];
+        }
+
+        return [
+            self::ACTION_PAYMENT_CHALLENGE => [[
+                'id' => self::ACTION_PAYMENT_CHALLENGE_ID,
+                'config' => [
+                    'instructions' => self::PAYMENT_CHALLENGE_INSTRUCTIONS,
+                ],
+            ]],
+        ];
     }
 
     /**

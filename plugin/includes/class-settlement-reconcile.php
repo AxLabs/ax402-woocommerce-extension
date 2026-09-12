@@ -95,7 +95,7 @@ final class Ax402_WC_Settlement_Reconcile
      *
      * Does not mark the order paid and does not consult the settlement_reconcile
      * setting. Fulfill uses this so path-token GETs cannot payment_complete()
-     * without a ledger row (binding adapter era).
+     * without a ledger row (binding External-URL path).
      *
      * @return array<string, mixed>|null
      */

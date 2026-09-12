@@ -6,7 +6,7 @@ defined('ABSPATH') || exit;
 /**
  * Detects Ax402 facilitator/gateway identifiers that must not appear in UCP JSON.
  *
- * The min-leak adapter still puts the gateway URL inside the x402
+ * The External-URL path still puts the gateway URL inside the x402
  * PAYMENT-REQUIRED header (signed `resource`). That header is not UCP JSON.
  * MCP copies the same PaymentRequired object into the tool result so clients
  * that cannot read HTTP headers can still sign; do not leak-scan that block.

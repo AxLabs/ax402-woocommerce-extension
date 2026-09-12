@@ -6,26 +6,34 @@ defined('ABSPATH') || exit;
 /**
  * Builds the official UCP business profile (discovery document).
  *
- * Follow official UCP 2026-04-08: `services` is an object of arrays with
+ * Follow official UCP 2026-08-25: `services` is an object of arrays with
  * `transport` + `endpoint`. REST stays first so existing REST agents keep
  * working; MCP is advertised second for the Shopify UCP CLI (MCP-only
  * negotiation in CLI 0.6.x). Official UCP and the binding `examples/discovery.json`
- * both use maps of arrays; omit `map_order`.
+ * both use maps of arrays; omit `map_order`. Handler `schema` is the x402.org
+ * URL (namespace authority); capability `spec` URLs point at shopping docs.
  */
 final class Ax402_WC_Ucp_Profile_Builder
 {
-    public const UCP_VERSION = '2026-04-08';
-    public const HANDLER_VERSION = '2026-08-20';
+    public const UCP_VERSION = '2026-08-25';
+    public const HANDLER_VERSION = '2026-08-25';
     public const QUOTE_WINDOW = 600;
-    public const TRANSIENT_KEY = 'ax402_wc_ucp_profile_v2';
+    public const TRANSIENT_KEY = 'ax402_wc_ucp_profile_v3';
     public const TRANSIENT_TTL = 300;
-    public const SPEC_BASE = 'https://ucp.dev/2026-04-08';
+    public const SPEC_BASE = 'https://ucp.dev/2026-08-25';
 
     public const HANDLER_SPEC = 'https://github.com/AxLabs/ucp-x402-binding';
-    public const HANDLER_SCHEMA = 'https://github.com/AxLabs/ucp-x402-binding/blob/main/schema/handler.schema.json';
+    public const HANDLER_SCHEMA = 'https://x402.org/schemas/ucp-payment-handler.json';
     public const SHOPPING_SPEC = self::SPEC_BASE . '/specification/overview';
     public const SHOPPING_REST_SCHEMA = self::SPEC_BASE . '/services/shopping/rest.openapi.json';
     public const SHOPPING_MCP_SCHEMA = self::SPEC_BASE . '/services/shopping/mcp.openrpc.json';
+
+    public const CAP_CATALOG_SEARCH = 'dev.ucp.shopping.catalog.search';
+    public const CAP_CATALOG_LOOKUP = 'dev.ucp.shopping.catalog.lookup';
+    public const CAP_CART = 'dev.ucp.shopping.cart';
+    public const CAP_CHECKOUT = 'dev.ucp.shopping.checkout';
+    public const CAP_FULFILLMENT = 'dev.ucp.shopping.fulfillment';
+    public const CAP_ORDER = 'dev.ucp.shopping.order';
 
     private const CAIP2 = '/^[a-z0-9-]{3,8}:[-_a-zA-Z0-9]{1,32}$/';
 
@@ -108,37 +116,12 @@ final class Ax402_WC_Ucp_Profile_Builder
                     ],
                 ],
                 'capabilities' => [
-                    'dev.ucp.shopping.catalog.search' => [[
-                        'version' => self::UCP_VERSION,
-                        'spec' => self::SPEC_BASE . '/specification/catalog',
-                        'schema' => self::SPEC_BASE . '/schemas/shopping/catalog_search.json',
-                    ]],
-                    'dev.ucp.shopping.catalog.lookup' => [[
-                        'version' => self::UCP_VERSION,
-                        'spec' => self::SPEC_BASE . '/specification/catalog',
-                        'schema' => self::SPEC_BASE . '/schemas/shopping/catalog_lookup.json',
-                    ]],
-                    'dev.ucp.shopping.cart' => [[
-                        'version' => self::UCP_VERSION,
-                        'spec' => self::SPEC_BASE . '/specification/cart',
-                        'schema' => self::SPEC_BASE . '/schemas/shopping/cart.json',
-                    ]],
-                    'dev.ucp.shopping.checkout' => [[
-                        'version' => self::UCP_VERSION,
-                        'spec' => self::SPEC_BASE . '/specification/checkout',
-                        'schema' => self::SPEC_BASE . '/schemas/shopping/checkout.json',
-                    ]],
-                    'dev.ucp.shopping.fulfillment' => [[
-                        'version' => self::UCP_VERSION,
-                        'spec' => self::SPEC_BASE . '/specification/fulfillment',
-                        'schema' => self::SPEC_BASE . '/schemas/shopping/fulfillment.json',
-                        'extends' => 'dev.ucp.shopping.checkout',
-                    ]],
-                    'dev.ucp.shopping.order' => [[
-                        'version' => self::UCP_VERSION,
-                        'spec' => self::SPEC_BASE . '/specification/order',
-                        'schema' => self::SPEC_BASE . '/schemas/shopping/order.json',
-                    ]],
+                    self::CAP_CATALOG_SEARCH => [self::capability_ref(self::CAP_CATALOG_SEARCH)],
+                    self::CAP_CATALOG_LOOKUP => [self::capability_ref(self::CAP_CATALOG_LOOKUP)],
+                    self::CAP_CART => [self::capability_ref(self::CAP_CART)],
+                    self::CAP_CHECKOUT => [self::capability_ref(self::CAP_CHECKOUT)],
+                    self::CAP_FULFILLMENT => [self::capability_ref(self::CAP_FULFILLMENT)],
+                    self::CAP_ORDER => [self::capability_ref(self::CAP_ORDER)],
                 ],
                 'payment_handlers' => $payment_handlers,
             ],
@@ -174,7 +157,63 @@ final class Ax402_WC_Ucp_Profile_Builder
     {
         if (function_exists('delete_transient')) {
             delete_transient(self::TRANSIENT_KEY);
+            delete_transient('ax402_wc_ucp_profile_v2');
         }
+    }
+
+    /**
+     * Capability entry for discovery and response envelopes (version + spec + schema).
+     *
+     * @return array<string, mixed>
+     */
+    public static function capability_ref(string $capability): array
+    {
+        $entry = ['version' => self::UCP_VERSION];
+        $urls = self::capability_urls($capability);
+        if ($urls !== null) {
+            $entry['spec'] = $urls['spec'];
+            $entry['schema'] = $urls['schema'];
+        }
+        if ($capability === self::CAP_FULFILLMENT) {
+            $entry['extends'] = self::CAP_CHECKOUT;
+        }
+
+        return $entry;
+    }
+
+    /**
+     * @return array{spec: string, schema: string}|null
+     */
+    public static function capability_urls(string $capability): ?array
+    {
+        $map = [
+            self::CAP_CATALOG_SEARCH => [
+                'spec' => self::SPEC_BASE . '/specification/shopping/catalog',
+                'schema' => self::SPEC_BASE . '/schemas/shopping/catalog_search.json',
+            ],
+            self::CAP_CATALOG_LOOKUP => [
+                'spec' => self::SPEC_BASE . '/specification/shopping/catalog',
+                'schema' => self::SPEC_BASE . '/schemas/shopping/catalog_lookup.json',
+            ],
+            self::CAP_CART => [
+                'spec' => self::SPEC_BASE . '/specification/shopping/cart',
+                'schema' => self::SPEC_BASE . '/schemas/shopping/cart.json',
+            ],
+            self::CAP_CHECKOUT => [
+                'spec' => self::SPEC_BASE . '/specification/shopping/checkout',
+                'schema' => self::SPEC_BASE . '/schemas/shopping/checkout.json',
+            ],
+            self::CAP_FULFILLMENT => [
+                'spec' => self::SPEC_BASE . '/specification/shopping/extensions/fulfillment',
+                'schema' => self::SPEC_BASE . '/schemas/shopping/fulfillment.json',
+            ],
+            self::CAP_ORDER => [
+                'spec' => self::SPEC_BASE . '/specification/shopping/order',
+                'schema' => self::SPEC_BASE . '/schemas/shopping/order.json',
+            ],
+        ];
+
+        return $map[$capability] ?? null;
     }
 
     /**

@@ -92,6 +92,11 @@ final class Ax402_WC_Ucp_Mapper
             }
         }
 
+        $actions = Ax402_WC_Ucp_Response::payment_challenge_actions($status);
+        if ($actions !== []) {
+            $payload['actions'] = $actions;
+        }
+
         Ax402_WC_Ucp_Leak::assert_clean($payload, Ax402_WC_Settings::all());
 
         return $payload;

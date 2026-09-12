@@ -6,8 +6,8 @@ defined('ABSPATH') || exit;
 /**
  * UCP POST …/complete: 402 challenge relay + settlement reconcile.
  *
- * Adapter era (ucp-x402-binding §3.1): HTTP 402 is on the shop complete URL;
- * PaymentRequired.resource stays the Ax402 gateway URL. The shop MUST NOT
+ * External-URL path (ucp-x402-binding §3.1): HTTP 402 is on the shop complete
+ * URL; PaymentRequired.resource stays the Ax402 gateway URL. The shop MUST NOT
  * replay PAYMENT-SIGNATURE to that gateway (confused deputy). Agents pay
  * resource.url with standard x402, then POST complete again. This class
  * GETs the gateway without a signature only to copy PAYMENT-REQUIRED.
@@ -40,9 +40,6 @@ final class Ax402_WC_Ucp_Complete
      */
     public function handle(string $session_id, WP_REST_Request $request, array $body): WP_REST_Response|WP_Error
     {
-        // $request is part of the REST/MCP dispatch signature. Older agents may
-        // still send PAYMENT-SIGNATURE on it; binding §3.1.5 forbids forwarding.
-        unset($request);
         $order = Ax402_WC_Ucp_Checkout::order_from_session($session_id);
         if (!$order instanceof WC_Order) {
             return Ax402_WC_Ucp_Response::rest_error(
@@ -51,6 +48,28 @@ final class Ax402_WC_Ucp_Complete
             );
         }
 
+        $idempotency_key = Ax402_WC_Ucp_Complete_Idempotency::from_request($request);
+        $replay = Ax402_WC_Ucp_Complete_Idempotency::replay($order, $idempotency_key);
+        if ($replay instanceof WP_REST_Response) {
+            return $replay;
+        }
+
+        // Older agents may still send PAYMENT-SIGNATURE; binding §3.1.5 forbids forwarding.
+        unset($request);
+
+        $response = $this->complete($order, $body);
+        if ($response instanceof WP_Error) {
+            return $response;
+        }
+
+        return Ax402_WC_Ucp_Complete_Idempotency::remember($order, $idempotency_key, $response);
+    }
+
+    /**
+     * @param array<string, mixed> $body
+     */
+    private function complete(WC_Order $order, array $body): WP_REST_Response|WP_Error
+    {
         Ax402_WC_Settlement_Reconcile::reconcile_order($order, null, true);
         $fresh = wc_get_order($order->get_id());
         if ($fresh instanceof WC_Order) {
@@ -180,6 +199,10 @@ final class Ax402_WC_Ucp_Complete
         );
         if ($instruments !== []) {
             $body['payment'] = ['instruments' => $instruments];
+        }
+        $actions = Ax402_WC_Ucp_Response::payment_challenge_actions(Ax402_WC_Ucp_Status::READY);
+        if ($actions !== []) {
+            $body['actions'] = $actions;
         }
 
         $response = new WP_REST_Response(

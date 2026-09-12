@@ -11,7 +11,7 @@ defined('ABSPATH') || exit;
  * as structuredContent (x402-standard) plus nested `payment_required` for UCP
  * session clients, and MAY be mirrored at result._meta["x402/payment-required"].
  * Retry: params._meta["x402/payment"] or payment.payment_signature in the body
- * (ideal-era vehicle; adapter era pays resource.url over HTTP, then complete
+ * (Same-URL vehicle; External-URL pays resource.url over HTTP, then complete
  * again with no signature). This helper still reads those fields so a signature
  * on complete is treated as reconcile, never forwarded to the gateway.
  */
