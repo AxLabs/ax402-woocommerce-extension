@@ -35,6 +35,7 @@ import {
 	walletCheckCopy,
 	withTimeout,
 } from './wallet-errors';
+import { wrapPaywallFetch } from './payment-fetch';
 
 function readConfig() {
 	return window.ax402PayPage || {};
@@ -108,15 +109,15 @@ function RateGlyph() {
 	);
 }
 
-function SettlementPicker( { options, selectedId, onSelect } ) {
+function SettlementPicker( { options, selectedId, onSelect, locked } ) {
 	if ( ! options.length ) {
 		return null;
 	}
 
-	const selectable = options.length > 1;
+	const selectable = options.length > 1 && ! locked;
 
 	return (
-		<div className="ax402-settle">
+		<div className={ locked ? 'ax402-settle is-locked' : 'ax402-settle' }>
 			<p className="ax402-settle-label">
 				{ selectable ? 'Choose settlement token' : 'Settlement token' }
 			</p>
@@ -174,9 +175,14 @@ function SettlementPicker( { options, selectedId, onSelect } ) {
 	);
 }
 
-function StepCard( { title, description, children, footer } ) {
+function StepCard( { title, description, children, footer, live } ) {
 	return (
-		<div className="ax402-step" role="region" aria-label={ title }>
+		<div
+			className="ax402-step"
+			role="region"
+			aria-label={ title }
+			aria-live={ live || undefined }
+		>
 			<h2 className="ax402-step-title">{ title }</h2>
 			{ description ? (
 				<p className="ax402-step-desc">{ description }</p>
@@ -439,24 +445,32 @@ function InsufficientBalanceStep( { option, balanceAtomic } ) {
 	);
 }
 
-function PayStep( { config, option, onPaymentSubmitted, startConfirming } ) {
+function ConfirmingPaymentStep() {
+	return (
+		<StepCard
+			title="Confirming payment…"
+			description="Your wallet payment was submitted. You don’t need to confirm anything else in your wallet. Waiting for the store to confirm it — this usually takes a few seconds."
+			live="polite"
+		>
+			<div className="ax402-spinner" aria-hidden="true" />
+			<p className="ax402-step-meta">Do not close this page.</p>
+		</StepCard>
+	);
+}
+
+function PayStep( {
+	config,
+	option,
+	onPaymentSubmitted,
+	startConfirming,
+	settling,
+} ) {
 	const priceLabel = formatPayLabel( option?.amount, option?.symbol );
 	const [ phase, setPhase ] = useState(
 		startConfirming ? 'confirming' : 'pay'
 	);
 	const [ error, setError ] = useState( '' );
-
-	if ( phase === 'confirming' ) {
-		return (
-			<StepCard
-				title="Confirming payment…"
-				description="Your wallet payment was submitted. Waiting for the store to confirm it — this usually takes a few seconds."
-			>
-				<div className="ax402-spinner" aria-hidden="true" />
-				<p className="ax402-step-meta">Do not close this page.</p>
-			</StepCard>
-		);
-	}
+	const confirming = phase === 'confirming' || Boolean( settling );
 
 	if ( phase === 'error' ) {
 		return (
@@ -481,54 +495,73 @@ function PayStep( { config, option, onPaymentSubmitted, startConfirming } ) {
 
 	return (
 		<div className="ax402-pay-step">
-			<PaywallGate
-				resourceUrl={ config.gatewayUrl }
-				title={ `Pay ${ priceLabel }` }
-				description={ `Confirm in your wallet to complete order #${
-					config.orderId || ''
-				} on ${ option.networkLabel }.` }
-				priceLabel={ priceLabel }
-				agentDiscovery={ false }
-				inspectOnMount
-				className="ax402-inline-gate"
-				onUnlocked={ async () => {
-					// Freeze the parent balance gate: post-settlement balance is
-					// below the order amount and would otherwise flash "Insufficient".
-					onPaymentSubmitted?.();
-					setPhase( 'confirming' );
-					setError( '' );
-					const confirmingStartedAt = Date.now();
-					const minConfirmingMs = 3000;
-					try {
-						await pollUntilPaid( config.statusUrl, {
-							intervalMs: 800,
-							timeoutMs: 90000,
-						} );
-						const elapsed = Date.now() - confirmingStartedAt;
-						if ( elapsed < minConfirmingMs ) {
-							await new Promise( ( resolve ) =>
-								setTimeout( resolve, minConfirmingMs - elapsed )
-							);
-						}
-						window.location.href = config.thankYouUrl;
-					} catch ( e ) {
-						setError(
-							'The store has not marked this order as paid yet. If you already confirmed in your wallet, wait a moment and tap Check again. If this keeps happening, contact the store with your order number.'
-						);
-						setPhase( 'error' );
-					}
-				} }
-				renderUnlocked={ () => (
-					<p>Payment received. Confirming with the store…</p>
-				) }
-			>
-				<p>Payment received. Confirming with the store…</p>
-			</PaywallGate>
+			{ confirming ? <ConfirmingPaymentStep /> : null }
+			{ phase === 'confirming' ? null : (
+				<div
+					className="ax402-pay-gate"
+					hidden={ confirming }
+					aria-hidden={ confirming }
+				>
+					<PaywallGate
+						resourceUrl={ config.gatewayUrl }
+						title={ `Pay ${ priceLabel }` }
+						description={ `Confirm in your wallet to complete order #${
+							config.orderId || ''
+						} on ${ option.networkLabel }.` }
+						priceLabel={ priceLabel }
+						agentDiscovery={ false }
+						inspectOnMount
+						className="ax402-inline-gate"
+						onUnlocked={ async () => {
+							// Freeze the parent balance gate: post-settlement balance is
+							// below the order amount and would otherwise flash "Insufficient".
+							onPaymentSubmitted?.();
+							setPhase( 'confirming' );
+							setError( '' );
+							const confirmingStartedAt = Date.now();
+							const minConfirmingMs = 3000;
+							try {
+								await pollUntilPaid( config.statusUrl, {
+									intervalMs: 800,
+									timeoutMs: 90000,
+								} );
+								const elapsed =
+									Date.now() - confirmingStartedAt;
+								if ( elapsed < minConfirmingMs ) {
+									await new Promise( ( resolve ) =>
+										setTimeout(
+											resolve,
+											minConfirmingMs - elapsed
+										)
+									);
+								}
+								window.location.href = config.thankYouUrl;
+							} catch ( e ) {
+								setError(
+									'The store has not marked this order as paid yet. If you already confirmed in your wallet, wait a moment and tap Check again. If this keeps happening, contact the store with your order number.'
+								);
+								setPhase( 'error' );
+							}
+						} }
+						renderUnlocked={ () => (
+							<p>Payment received. Confirming with the store…</p>
+						) }
+					>
+						<p>Payment received. Confirming with the store…</p>
+					</PaywallGate>
+				</div>
+			) }
 		</div>
 	);
 }
 
-function PaymentSteps( { config, option, endpointReady, lockError } ) {
+function PaymentSteps( {
+	config,
+	option,
+	endpointReady,
+	lockError,
+	signedPaymentInFlight,
+} ) {
 	const { walletAddress } = usePaywall();
 	const [ chainId, setChainId ] = useState( null );
 	const [ balanceAtomic, setBalanceAtomic ] = useState( null );
@@ -539,6 +572,13 @@ function PaymentSteps( { config, option, endpointReady, lockError } ) {
 	const [ paymentSubmitted, setPaymentSubmitted ] = useState( false );
 	const hedera = isHederaOption( option );
 	const tokenKey = option?.tokenId || '';
+	const freezePay = paymentSubmitted || Boolean( signedPaymentInFlight );
+
+	useEffect( () => {
+		if ( signedPaymentInFlight ) {
+			setPaymentSubmitted( true );
+		}
+	}, [ signedPaymentInFlight ] );
 
 	const networkOk = hedera
 		? true
@@ -548,12 +588,12 @@ function PaymentSteps( { config, option, endpointReady, lockError } ) {
 		networkOk,
 		balanceAtomic,
 		requiredAtomic: option?.amountAtomic,
-		paymentSubmitted,
+		paymentSubmitted: freezePay,
 	} );
 
 	useEffect( () => {
-		if ( ! walletAddress || ! option || paymentSubmitted ) {
-			if ( paymentSubmitted ) {
+		if ( ! walletAddress || ! option || freezePay ) {
+			if ( freezePay ) {
 				return undefined;
 			}
 			setChainId( null );
@@ -696,23 +736,27 @@ function PaymentSteps( { config, option, endpointReady, lockError } ) {
 			provider.removeListener?.( 'chainChanged', onChain );
 			provider.removeListener?.( 'accountsChanged', onAccounts );
 		};
-	}, [
-		walletAddress,
-		tokenKey,
-		hedera,
-		paymentSubmitted,
-		checkNonce,
-		option,
-	] );
+	}, [ walletAddress, tokenKey, hedera, freezePay, checkNonce, option ] );
 
 	let step = null;
-	if ( ! walletAddress ) {
+	if ( ! walletAddress && ! freezePay ) {
 		step = <ConnectStep hedera={ hedera } />;
 	} else if ( ! option ) {
 		step = (
 			<StepCard
 				title="No settlement token"
 				description="This store has no payable settlement token configured."
+			/>
+		);
+	} else if ( freezePay ) {
+		step = (
+			<PayStep
+				key={ option.tokenId }
+				config={ config }
+				option={ option }
+				settling={ Boolean( signedPaymentInFlight ) }
+				startConfirming={ paymentSubmitted }
+				onPaymentSubmitted={ () => setPaymentSubmitted( true ) }
 			/>
 		);
 	} else if ( walletStatus === 'checking' || walletStatus === 'idle' ) {
@@ -728,7 +772,7 @@ function PaymentSteps( { config, option, endpointReady, lockError } ) {
 				} }
 			/>
 		);
-	} else if ( ! networkOk && ! paymentSubmitted ) {
+	} else if ( ! networkOk ) {
 		step = <SwitchNetworkStep option={ option } />;
 	} else if ( showInsufficient ) {
 		step = (
@@ -737,7 +781,7 @@ function PaymentSteps( { config, option, endpointReady, lockError } ) {
 				balanceAtomic={ balanceAtomic }
 			/>
 		);
-	} else if ( lockError && ! paymentSubmitted ) {
+	} else if ( lockError ) {
 		step = (
 			<StepCard
 				title="Could not prepare payment"
@@ -754,7 +798,7 @@ function PaymentSteps( { config, option, endpointReady, lockError } ) {
 				</button>
 			</StepCard>
 		);
-	} else if ( ! endpointReady && ! paymentSubmitted ) {
+	} else if ( ! endpointReady ) {
 		step = (
 			<StepCard
 				title="Preparing payment…"
@@ -769,6 +813,7 @@ function PaymentSteps( { config, option, endpointReady, lockError } ) {
 				key={ option.tokenId }
 				config={ config }
 				option={ option }
+				settling={ Boolean( signedPaymentInFlight ) }
 				startConfirming={ paymentSubmitted }
 				onPaymentSubmitted={ () => setPaymentSubmitted( true ) }
 			/>
@@ -797,6 +842,25 @@ function PayApp() {
 	const [ activeGatewayUrl, setActiveGatewayUrl ] = useState(
 		() => options[ 0 ]?.gatewayUrl || config.gatewayUrl || ''
 	);
+	const [ signedPaymentInFlight, setSignedPaymentInFlight ] =
+		useState( false );
+
+	const paywallFetch = useMemo(
+		() =>
+			wrapPaywallFetch( globalThis.fetch.bind( globalThis ), {
+				onPaymentSubmitted: () => {
+					setSignedPaymentInFlight( true );
+				},
+				onPaymentFailed: () => {
+					setSignedPaymentInFlight( false );
+				},
+			} ),
+		[]
+	);
+
+	useEffect( () => {
+		setSignedPaymentInFlight( false );
+	}, [ selectedId ] );
 
 	useEffect( () => {
 		if (
@@ -924,9 +988,11 @@ function PayApp() {
 				options={ options }
 				selectedId={ selected?.tokenId || '' }
 				onSelect={ setSelectedId }
+				locked={ signedPaymentInFlight }
 			/>
 			<PaywallProvider
 				key={ isHederaOption( selected ) ? 'hedera' : 'evm' }
+				fetch={ paywallFetch }
 				policy={ {
 					preferredNetworks: policyNetwork,
 					allowedAssets: policyAsset,
@@ -953,6 +1019,7 @@ function PayApp() {
 					option={ selected }
 					endpointReady={ endpointReady }
 					lockError={ lockError }
+					signedPaymentInFlight={ signedPaymentInFlight }
 				/>
 			</PaywallProvider>
 		</>

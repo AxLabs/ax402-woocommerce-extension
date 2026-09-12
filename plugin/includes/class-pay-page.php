@@ -541,6 +541,10 @@ final class Ax402_WC_Pay_Page
             opacity: 0.85;
         }
         .ax402-settle-option:disabled { cursor: default; opacity: 1; }
+        .ax402-settle.is-locked .ax402-settle-option {
+            cursor: default;
+            opacity: 0.72;
+        }
         .ax402-steps { margin-top: 0.25rem; }
         .ax402-step {
             border: 1px solid var(--ax402-border);
@@ -589,6 +593,9 @@ final class Ax402_WC_Pay_Page
         }
         .ax402-primary-btn:disabled { opacity: 0.6; cursor: wait; }
         .ax402-pay-step { margin-top: 0.15rem; max-width: 100%; }
+        .ax402-pay-gate[hidden] {
+            display: none !important;
+        }
         /* Dedicated pay page: keep paywall card in normal flow (not a stacked overlay). */
         .ax402-inline-gate.x402-paywall-gate,
         .ax402-pay-card .x402-paywall-gate {

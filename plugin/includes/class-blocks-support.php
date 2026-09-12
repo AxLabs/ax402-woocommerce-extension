@@ -68,7 +68,10 @@ final class Ax402_WC_Blocks_Support extends AbstractPaymentMethodType
         $gateway = new Ax402_WC_Gateway_Ax402();
         return [
             'title' => $gateway->title,
-            'description' => $gateway->description,
+            'description' => wp_kses(
+                (string) $gateway->description,
+                ['strong' => []]
+            ),
             'supports' => array_filter($gateway->supports, [$gateway, 'supports']),
             'icon' => $gateway->icon,
         ];

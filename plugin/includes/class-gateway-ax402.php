@@ -28,10 +28,14 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
         $this->init_settings();
 
         $this->title = __('Pay with Ax402', 'ax402-for-woocommerce');
-        $this->description = __(
-            'Pay with a wallet using stablecoins or supported tokens via Ax402 using the x402 standard. For people and AI agents. No network fees for shoppers.',
-            'ax402-for-woocommerce'
-        );
+        $this->description =
+            esc_html__(
+                'Pay with a wallet using stablecoins or supported tokens via Ax402 using the x402 standard. For people and AI agents.',
+                'ax402-for-woocommerce'
+            )
+            . ' <strong>'
+            . esc_html__('No network fees for shoppers.', 'ax402-for-woocommerce')
+            . '</strong>';
         $this->enabled = $this->get_option('enabled', 'no');
 
         add_action(

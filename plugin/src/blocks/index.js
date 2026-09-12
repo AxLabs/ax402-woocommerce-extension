@@ -1,3 +1,4 @@
+import { RawHTML } from '@wordpress/element';
 import { decodeEntities } from '@wordpress/html-entities';
 
 const { registerPaymentMethod } = window.wc?.wcBlocksRegistry || {};
@@ -15,7 +16,7 @@ if (
 	const label = decodeEntities( settings.title || 'Pay with Ax402' );
 
 	const Content = () => (
-		<div>{ decodeEntities( settings.description || '' ) }</div>
+		<RawHTML>{ decodeEntities( settings.description || '' ) }</RawHTML>
 	);
 
 	const Label = () => (
