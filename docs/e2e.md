@@ -11,7 +11,7 @@ Product context: [context.md](context.md). Day-to-day local setup: [local-develo
 | Check | Expected |
 |---|---|
 | `wp-env` running | http://localhost:8888 responds |
-| Stack versions | WordPress **7.0.x**, WooCommerce **11.0.x** (pinned in [`.wp-env.json`](../.wp-env.json); refresh with `npm run env:update`) |
+| Stack versions | WordPress **7.0.x**, WooCommerce **11.1.x** (pinned in [`.wp-env.json`](../.wp-env.json); refresh with `npm run env:update`) |
 | Seed applied | 6 demo products, Ax402 enabled, coming-soon **off** |
 | Gateway | `is_available=yes` (API key + EVM and/or Hedera pay-to from settings / `.env`) |
 | Public origin | `WP_BASE_URL` / `WP_HOME` = HTTPS tunnel (required for live settle) |
@@ -20,7 +20,7 @@ Product context: [context.md](context.md). Day-to-day local setup: [local-develo
 
 The seed alone is enough for **browsing / checkout UI**. A **public tunnel** is required for Ax402 to call fulfill after payment.
 
-**Support vs E2E target:** E2E runs on the newest WooCommerce we pin (currently 11.0). Merchants on older WooCommerce remain supported down to **8.0** (`WC requires at least`), as long as we do not rely on APIs newer than that floor. When raising the E2E pin, smoke the pay flow here before bumping `WC tested up to` in the plugin header / readme.
+**Support vs E2E target:** E2E runs on the newest WooCommerce we pin (currently 11.1). Merchants on older WooCommerce remain supported down to **8.0** (`WC requires at least`), as long as we do not rely on APIs newer than that floor. When raising the E2E pin, smoke the pay flow here before bumping `WC tested up to` in the plugin header / readme.
 
 ---
 

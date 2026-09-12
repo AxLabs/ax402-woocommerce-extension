@@ -21,6 +21,8 @@ npx wp-env run cli wp option update woocommerce_coming_soon no
 npx wp-env run cli wp plugin activate woocommerce.latest-stable || \
   npx wp-env run cli wp plugin activate woocommerce || true
 npx wp-env run cli wp plugin activate plugin || true
+# Pinned WC zip bumps leave the store on the previous schema until this runs.
+npx wp-env run cli wp wc update --user=1 || true
 
 # Enable gateway. Host .env is written into the mounted plugin dir (wp-env PHP
 # getenv() cannot see the host shell). Merge so empty values never wipe secrets.

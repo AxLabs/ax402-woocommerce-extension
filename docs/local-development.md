@@ -62,7 +62,7 @@ npm run env:start
 What this does ([`.wp-env.json`](../.wp-env.json)):
 
 1. Starts WordPress (PHP 8.2) in Docker
-2. Installs **WooCommerce 11.0.0** (pinned for the E2E target) + mounts [`plugin/`](../plugin/) as a plugin
+2. Installs **WooCommerce 11.1.0** (pinned for the E2E target) + mounts [`plugin/`](../plugin/) as a plugin
 3. Runs **`afterStart` → `bash bin/seed-wp-env.sh`** automatically
 
 **Compatibility posture:** the local/E2E env always tracks a **current** WooCommerce (and WordPress) so we catch regressions early. The plugin still declares a lower floor for merchants on older-but-reasonable installs (`WC requires at least: 8.0`, `Requires at least: 6.0` for WordPress). Bump the pinned zip in `.wp-env.json` when you intentionally move the E2E target forward, then refresh with `npm run env:update`.
