@@ -12,8 +12,8 @@ import {
 	formatPayLabel,
 	formatTokenAmount,
 	formatUsdExchangeRate,
-	hasSufficientBalance,
 	networkMatches,
+	shouldShowInsufficientBalance,
 } from './readiness';
 import {
 	fetchTokenBalance,
@@ -27,6 +27,14 @@ import {
 	isHederaOption,
 	shortHederaAccount,
 } from './hedera-readiness';
+import {
+	WALLET_CONNECT_TIMEOUT_MS,
+	WALLET_READ_TIMEOUT_MS,
+	WALLET_SWITCH_TIMEOUT_MS,
+	humanizeWalletError,
+	walletCheckCopy,
+	withTimeout,
+} from './wallet-errors';
 
 function readConfig() {
 	return window.ax402PayPage || {};
@@ -198,9 +206,17 @@ function ConnectStep( { hedera } ) {
 		setPickerWallets( [] );
 		try {
 			if ( hedera ) {
-				await connectHederaWallet();
+				await withTimeout(
+					connectHederaWallet(),
+					WALLET_CONNECT_TIMEOUT_MS,
+					'Timed out connecting your Hedera wallet. Open the WalletConnect prompt and try again.'
+				);
 			} else {
-				await connectWallet();
+				await withTimeout(
+					connectWallet(),
+					WALLET_CONNECT_TIMEOUT_MS,
+					'Timed out connecting your wallet. Open MetaMask (or your wallet) and try again.'
+				);
 			}
 		} catch ( e ) {
 			if ( ! hedera && e instanceof WalletSelectionRequiredError ) {
@@ -211,13 +227,19 @@ function ConnectStep( { hedera } ) {
 					if ( list?.length > 1 ) {
 						setPickerWallets( list );
 					} else {
-						setError( e?.message || 'Could not connect wallet' );
+						setError(
+							humanizeWalletError( e, 'Could not connect wallet' )
+						);
 					}
 				} catch {
-					setError( e?.message || 'Could not connect wallet' );
+					setError(
+						humanizeWalletError( e, 'Could not connect wallet' )
+					);
 				}
 			} else {
-				setError( e?.message || 'Could not connect Hedera wallet' );
+				setError(
+					humanizeWalletError( e, 'Could not connect Hedera wallet' )
+				);
 			}
 		} finally {
 			setBusy( false );
@@ -228,10 +250,14 @@ function ConnectStep( { hedera } ) {
 		setBusy( true );
 		setError( '' );
 		try {
-			await connectWallet( walletId );
+			await withTimeout(
+				connectWallet( walletId ),
+				WALLET_CONNECT_TIMEOUT_MS,
+				'Timed out connecting your wallet. Open MetaMask (or your wallet) and try again.'
+			);
 			setPickerWallets( [] );
 		} catch ( e ) {
-			setError( e?.message || 'Could not connect wallet' );
+			setError( humanizeWalletError( e, 'Could not connect wallet' ) );
 		} finally {
 			setBusy( false );
 		}
@@ -270,6 +296,9 @@ function ConnectStep( { hedera } ) {
 					} )() }
 				</button>
 			) }
+			{ busy ? (
+				<div className="ax402-spinner" aria-hidden="true" />
+			) : null }
 			{ error ? (
 				<p className="ax402-step-error" role="alert">
 					{ error }
@@ -290,19 +319,26 @@ function SwitchNetworkStep( { option } ) {
 	async function onSwitchNetwork() {
 		const provider = getEthereumProvider();
 		if ( ! provider || ! option ) {
+			setError(
+				'No Ethereum wallet found. Unlock MetaMask and try again.'
+			);
 			return;
 		}
 		setBusy( true );
 		setError( '' );
 		try {
-			await switchOrAddChain( provider, {
-				chainIdHex: option.chainIdHex,
-				networkLabel: option.networkLabel,
-				rpcUrl: option.rpcUrl,
-				blockExplorerUrl: option.blockExplorerUrl,
-			} );
+			await withTimeout(
+				switchOrAddChain( provider, {
+					chainIdHex: option.chainIdHex,
+					networkLabel: option.networkLabel,
+					rpcUrl: option.rpcUrl,
+					blockExplorerUrl: option.blockExplorerUrl,
+				} ),
+				WALLET_SWITCH_TIMEOUT_MS,
+				`Timed out waiting to switch to ${ option.networkLabel }. Open your wallet to approve the switch, then try again.`
+			);
 		} catch ( e ) {
-			setError( e?.message || 'Network switch failed' );
+			setError( humanizeWalletError( e, 'Network switch failed' ) );
 		} finally {
 			setBusy( false );
 		}
@@ -311,7 +347,11 @@ function SwitchNetworkStep( { option } ) {
 	return (
 		<StepCard
 			title={ `Switch to ${ option.networkLabel }` }
-			description={ `Your wallet is on the wrong network for ${ option.symbol }. Switch, then you’ll confirm the payment.` }
+			description={
+				busy
+					? `Waiting for your wallet to switch to ${ option.networkLabel }. Check the wallet popup if nothing happens.`
+					: `Your wallet is on the wrong network for ${ option.symbol }. Switch, then this page will check your balance before you pay.`
+			}
 			footer={
 				<span>
 					{ connectedWalletName ? `${ connectedWalletName } · ` : '' }
@@ -327,11 +367,47 @@ function SwitchNetworkStep( { option } ) {
 			>
 				{ busy ? 'Switching…' : `Switch to ${ option.networkLabel }` }
 			</button>
+			{ busy ? (
+				<div className="ax402-spinner" aria-hidden="true" />
+			) : null }
 			{ error ? (
 				<p className="ax402-step-error" role="alert">
 					{ error }
 				</p>
 			) : null }
+		</StepCard>
+	);
+}
+
+function CheckingWalletStep( { option, phase } ) {
+	const copy = walletCheckCopy( { phase, option } );
+	return (
+		<StepCard title={ copy.title } description={ copy.description }>
+			<div className="ax402-spinner" aria-hidden="true" />
+			<p className="ax402-step-meta" aria-live="polite">
+				This is not a payment yet. We only read your network and
+				balance.
+			</p>
+		</StepCard>
+	);
+}
+
+function WalletIssueStep( { message, onRetry } ) {
+	return (
+		<StepCard
+			title="Could not check your wallet"
+			description={
+				message ||
+				'Something went wrong while talking to your wallet. Try again.'
+			}
+		>
+			<button
+				type="button"
+				className="ax402-primary-btn"
+				onClick={ onRetry }
+			>
+				Try again
+			</button>
 		</StepCard>
 	);
 }
@@ -456,24 +532,24 @@ function PaymentSteps( { config, option, endpointReady, lockError } ) {
 	const { walletAddress } = usePaywall();
 	const [ chainId, setChainId ] = useState( null );
 	const [ balanceAtomic, setBalanceAtomic ] = useState( null );
+	const [ walletStatus, setWalletStatus ] = useState( 'idle' );
+	const [ checkPhase, setCheckPhase ] = useState( 'network' );
 	const [ readError, setReadError ] = useState( '' );
+	const [ checkNonce, setCheckNonce ] = useState( 0 );
 	const [ paymentSubmitted, setPaymentSubmitted ] = useState( false );
-	const [ hadSufficientBalance, setHadSufficientBalance ] = useState( false );
 	const hedera = isHederaOption( option );
+	const tokenKey = option?.tokenId || '';
 
 	const networkOk = hedera
 		? true
 		: networkMatches( chainId, option?.chainIdHex );
-	const balanceOk = hasSufficientBalance(
+	const showInsufficient = shouldShowInsufficientBalance( {
+		walletStatus,
+		networkOk,
 		balanceAtomic,
-		option?.amountAtomic
-	);
-
-	useEffect( () => {
-		if ( networkOk && balanceOk ) {
-			setHadSufficientBalance( true );
-		}
-	}, [ networkOk, balanceOk ] );
+		requiredAtomic: option?.amountAtomic,
+		paymentSubmitted,
+	} );
 
 	useEffect( () => {
 		if ( ! walletAddress || ! option || paymentSubmitted ) {
@@ -482,35 +558,63 @@ function PaymentSteps( { config, option, endpointReady, lockError } ) {
 			}
 			setChainId( null );
 			setBalanceAtomic( null );
+			setWalletStatus( 'idle' );
 			return undefined;
 		}
 
 		let cancelled = false;
+		setWalletStatus( 'checking' );
+		setCheckPhase( hedera ? 'balance' : 'network' );
+		setBalanceAtomic( null );
+		setReadError( '' );
 
-		async function refresh() {
+		async function refresh( { silent = false } = {} ) {
 			try {
 				if ( hedera ) {
-					const bal = await fetchHederaBalance( {
-						mirrorBase: option.rpcUrl,
-						accountId: walletAddress,
-						asset: option.asset,
-						isNative: Boolean( option.isNative ),
-					} );
-					if ( ! cancelled ) {
-						setChainId( 'hedera' );
-						setBalanceAtomic( bal );
-						setReadError( '' );
+					if ( ! silent ) {
+						setCheckPhase( 'balance' );
 					}
+					const bal = await withTimeout(
+						fetchHederaBalance( {
+							mirrorBase: option.rpcUrl,
+							accountId: walletAddress,
+							asset: option.asset,
+							isNative: Boolean( option.isNative ),
+						} ),
+						WALLET_READ_TIMEOUT_MS,
+						`Timed out reading your ${ option.symbol } balance from Hedera. Check your connection and try again.`
+					);
+					if ( cancelled ) {
+						return;
+					}
+					setChainId( 'hedera' );
+					setBalanceAtomic( bal );
+					setReadError( '' );
+					setWalletStatus( 'ready' );
 					return;
 				}
 
 				const provider = getEthereumProvider();
 				if ( ! provider ) {
+					if ( silent ) {
+						return;
+					}
 					setChainId( null );
 					setBalanceAtomic( null );
+					setWalletStatus( 'error' );
+					setReadError(
+						'No Ethereum wallet found. Unlock MetaMask and try again.'
+					);
 					return;
 				}
-				const nextChain = await getWalletChainId( provider );
+				if ( ! silent ) {
+					setCheckPhase( 'network' );
+				}
+				const nextChain = await withTimeout(
+					getWalletChainId( provider ),
+					WALLET_READ_TIMEOUT_MS,
+					'Timed out asking your wallet for the current network. Open your wallet and try again.'
+				);
 				if ( cancelled ) {
 					return;
 				}
@@ -520,28 +624,44 @@ function PaymentSteps( { config, option, endpointReady, lockError } ) {
 					! option.asset
 				) {
 					setBalanceAtomic( null );
+					setWalletStatus( 'ready' );
 					return;
 				}
-				const bal = await fetchTokenBalance( provider, {
-					asset: option.asset,
-					isNative: Boolean( option.isNative ),
-					owner: walletAddress,
-				} );
-				if ( ! cancelled ) {
-					setBalanceAtomic( bal );
-					setReadError( '' );
+				if ( ! silent ) {
+					setCheckPhase( 'balance' );
 				}
+				const bal = await withTimeout(
+					fetchTokenBalance( provider, {
+						asset: option.asset,
+						isNative: Boolean( option.isNative ),
+						owner: walletAddress,
+					} ),
+					WALLET_READ_TIMEOUT_MS,
+					`Timed out reading your ${ option.symbol } balance on ${ option.networkLabel }. The network may be slow — try again.`
+				);
+				if ( cancelled ) {
+					return;
+				}
+				setBalanceAtomic( bal );
+				setReadError( '' );
+				setWalletStatus( 'ready' );
 			} catch ( e ) {
-				if ( ! cancelled ) {
-					setReadError( e?.message || 'Could not read wallet state' );
+				if ( cancelled || silent ) {
+					return;
 				}
+				setWalletStatus( 'error' );
+				setReadError(
+					humanizeWalletError( e, 'Could not read wallet state' )
+				);
 			}
 		}
 
-		refresh();
+		refresh( { silent: false } );
 
 		if ( hedera ) {
-			const timer = setInterval( refresh, 8000 );
+			const timer = setInterval( () => {
+				refresh( { silent: true } );
+			}, 8000 );
 			return () => {
 				cancelled = true;
 				clearInterval( timer );
@@ -555,20 +675,35 @@ function PaymentSteps( { config, option, endpointReady, lockError } ) {
 			};
 		}
 
-		const onChain = ( id ) => {
-			setChainId( typeof id === 'string' ? id : null );
+		const onChain = () => {
+			setBalanceAtomic( null );
+			setWalletStatus( 'checking' );
+			setCheckPhase( 'network' );
+			refresh( { silent: false } );
+		};
+		const onAccounts = () => {
+			refresh( { silent: false } );
 		};
 		provider.on?.( 'chainChanged', onChain );
-		provider.on?.( 'accountsChanged', refresh );
-		const timer = setInterval( refresh, 8000 );
+		provider.on?.( 'accountsChanged', onAccounts );
+		const timer = setInterval( () => {
+			refresh( { silent: true } );
+		}, 8000 );
 
 		return () => {
 			cancelled = true;
 			clearInterval( timer );
 			provider.removeListener?.( 'chainChanged', onChain );
-			provider.removeListener?.( 'accountsChanged', refresh );
+			provider.removeListener?.( 'accountsChanged', onAccounts );
 		};
-	}, [ walletAddress, option, hedera, paymentSubmitted ] );
+	}, [
+		walletAddress,
+		tokenKey,
+		hedera,
+		paymentSubmitted,
+		checkNonce,
+		option,
+	] );
 
 	let step = null;
 	if ( ! walletAddress ) {
@@ -580,9 +715,22 @@ function PaymentSteps( { config, option, endpointReady, lockError } ) {
 				description="This store has no payable settlement token configured."
 			/>
 		);
+	} else if ( walletStatus === 'checking' || walletStatus === 'idle' ) {
+		step = <CheckingWalletStep option={ option } phase={ checkPhase } />;
+	} else if ( walletStatus === 'error' ) {
+		step = (
+			<WalletIssueStep
+				message={ readError }
+				onRetry={ () => {
+					setReadError( '' );
+					setWalletStatus( 'checking' );
+					setCheckNonce( ( n ) => n + 1 );
+				} }
+			/>
+		);
 	} else if ( ! networkOk && ! paymentSubmitted ) {
 		step = <SwitchNetworkStep option={ option } />;
-	} else if ( ! balanceOk && ! paymentSubmitted && ! hadSufficientBalance ) {
+	} else if ( showInsufficient ) {
 		step = (
 			<InsufficientBalanceStep
 				option={ option }
@@ -618,6 +766,7 @@ function PaymentSteps( { config, option, endpointReady, lockError } ) {
 	} else {
 		step = (
 			<PayStep
+				key={ option.tokenId }
 				config={ config }
 				option={ option }
 				startConfirming={ paymentSubmitted }
@@ -626,16 +775,7 @@ function PaymentSteps( { config, option, endpointReady, lockError } ) {
 		);
 	}
 
-	return (
-		<div className="ax402-steps">
-			{ readError ? (
-				<p className="ax402-step-error" role="alert">
-					{ readError }
-				</p>
-			) : null }
-			{ step }
-		</div>
-	);
+	return <div className="ax402-steps">{ step }</div>;
 }
 
 function PayApp() {
@@ -786,9 +926,7 @@ function PayApp() {
 				onSelect={ setSelectedId }
 			/>
 			<PaywallProvider
-				key={ `${ selected?.tokenId || 'default' }-${
-					endpointReady ? 'ready' : 'locking'
-				}` }
+				key={ isHederaOption( selected ) ? 'hedera' : 'evm' }
 				policy={ {
 					preferredNetworks: policyNetwork,
 					allowedAssets: policyAsset,

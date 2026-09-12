@@ -7,6 +7,7 @@ import {
 	hasSufficientBalance,
 	hexQuantityToDecimal,
 	networkMatches,
+	shouldShowInsufficientBalance,
 } from '../../plugin/src/pay-page/readiness.js';
 
 describe('networkMatches', () => {
@@ -28,6 +29,56 @@ describe('hasSufficientBalance', () => {
 	it('rejects non-numeric input', () => {
 		expect(hasSufficientBalance('0x10', '16')).toBe(false);
 		expect(hasSufficientBalance(null, '1')).toBe(false);
+	});
+});
+
+describe('shouldShowInsufficientBalance', () => {
+	const shortfall = {
+		walletStatus: 'ready',
+		networkOk: true,
+		balanceAtomic: '1',
+		requiredAtomic: '1000',
+		paymentSubmitted: false,
+	};
+
+	it('shows only a confirmed shortfall on the matching network', () => {
+		expect(shouldShowInsufficientBalance(shortfall)).toBe(true);
+		expect(
+			shouldShowInsufficientBalance({
+				...shortfall,
+				balanceAtomic: '1000',
+			})
+		).toBe(false);
+	});
+
+	it('hides while checking, on the wrong network, or after pay starts', () => {
+		expect(
+			shouldShowInsufficientBalance({
+				...shortfall,
+				walletStatus: 'checking',
+			})
+		).toBe(false);
+		expect(
+			shouldShowInsufficientBalance({
+				...shortfall,
+				walletStatus: 'error',
+			})
+		).toBe(false);
+		expect(
+			shouldShowInsufficientBalance({ ...shortfall, networkOk: false })
+		).toBe(false);
+		expect(
+			shouldShowInsufficientBalance({
+				...shortfall,
+				balanceAtomic: null,
+			})
+		).toBe(false);
+		expect(
+			shouldShowInsufficientBalance({
+				...shortfall,
+				paymentSubmitted: true,
+			})
+		).toBe(false);
 	});
 });
 

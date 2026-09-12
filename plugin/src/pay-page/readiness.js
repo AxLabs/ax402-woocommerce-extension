@@ -43,6 +43,48 @@ export function hasSufficientBalance( balanceAtomic, requiredAtomic ) {
 }
 
 /**
+ * True when we have a real on-chain atomic balance (not "still loading").
+ *
+ * @param {string|null|undefined} balanceAtomic
+ * @return {boolean} Whether the value is a decimal integer string.
+ */
+export function isKnownAtomicBalance( balanceAtomic ) {
+	if ( balanceAtomic === null || balanceAtomic === undefined ) {
+		return false;
+	}
+	return /^\d+$/.test( String( balanceAtomic ) );
+}
+
+/**
+ * Insufficient-balance copy is only for a confirmed shortfall on the right
+ * network, before the shopper pays or switches networks.
+ *
+ * @param {{
+ *   walletStatus?: string,
+ *   networkOk?: boolean,
+ *   balanceAtomic?: string|null,
+ *   requiredAtomic?: string|null,
+ *   paymentSubmitted?: boolean,
+ * }} state
+ * @return {boolean} Whether the insufficient-balance step should render.
+ */
+export function shouldShowInsufficientBalance( state = {} ) {
+	if ( state.paymentSubmitted ) {
+		return false;
+	}
+	if ( state.walletStatus !== 'ready' ) {
+		return false;
+	}
+	if ( ! state.networkOk ) {
+		return false;
+	}
+	if ( ! isKnownAtomicBalance( state.balanceAtomic ) ) {
+		return false;
+	}
+	return ! hasSufficientBalance( state.balanceAtomic, state.requiredAtomic );
+}
+
+/**
  * @param {string} hexQuantity
  * @return {string} Decimal atomic string.
  */
