@@ -3,7 +3,7 @@
  *
  * Requires:
  * - `ucp` on PATH (https://github.com/Shopify/ucp-cli)
- * - AX402_UCP_ENABLED=yes (re-seed)
+ * - UCP enabled (on after seed unless AX402_UCP_ENABLED=no)
  * - WP_BASE_URL — HTTPS origin the CLI will use as --business (ngrok/cloudflare)
  *
  * Walks discover → catalog search → --input-schema → cart → checkout →

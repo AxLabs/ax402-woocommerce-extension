@@ -141,8 +141,7 @@ Optional: `E2E_PRODUCT_ID=<id>` to pin a SKU (otherwise first catalog product).
 ### A2) UCP agent pay
 
 ```bash
-# .env: WP_BASE_URL, AX402_EVM_PRIVATE_KEY, AX402_UCP_ENABLED=yes
-# re-seed after setting AX402_UCP_ENABLED so /.well-known/ucp is served
+# .env: WP_BASE_URL, AX402_EVM_PRIVATE_KEY (UCP is on after seed unless AX402_UCP_ENABLED=no)
 npm run env:e2e
 set -a && source .env && set +a
 npm run test:e2e-ucp
@@ -155,7 +154,7 @@ Flow: discover → catalog search → create cart → create checkout from `cart
 Shopify `ucp` CLI smoke (discover → cart → checkout → complete **without** paying):
 
 ```bash
-# needs `ucp` on PATH, AX402_UCP_ENABLED=yes, WP_BASE_URL=https://…
+# needs `ucp` on PATH, WP_BASE_URL=https://… (UCP on after seed unless AX402_UCP_ENABLED=no)
 npm run test:e2e-ucp-cli
 # E2E_UCP_PHYSICAL=1 npm run test:e2e-ucp-cli
 ```

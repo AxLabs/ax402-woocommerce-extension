@@ -37,7 +37,7 @@ Quick path once `.env` is filled and `wp-env` is up:
 npm run env:e2e          # seed + readiness (+ WP_BASE_URL sync)
 # with tunnel running and WP_BASE_URL set:
 npm run test:e2e-pay     # programmatic agent pay
-npm run test:e2e-ucp     # UCP agent (AX402_UCP_ENABLED=yes, then re-seed)
+npm run test:e2e-ucp     # UCP agent (on after seed; AX402_UCP_ENABLED=no to disable)
 ```
 
 ### Playwright UI

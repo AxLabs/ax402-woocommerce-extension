@@ -15,7 +15,7 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
         $this->id = self::GATEWAY_ID;
         $this->method_title = __('Ax402 (x402)', 'ax402-for-woocommerce');
         $this->method_description = __(
-            'Accept on-chain settlements via Ax402 / x402 for humans (wallet) and agents (buyer SDKs). Catalog currency stays USD.',
+            'Ax402 is an x402 payment provider for shoppers and agents, with Universal Commerce Protocol (UCP) support. Catalog currency stays USD.',
             'ax402-for-woocommerce'
         );
         $this->has_fields = false;
@@ -78,15 +78,22 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
             ],
             'base_url' => [
                 'title' => __('Ax402 API base URL', 'ax402-for-woocommerce'),
-                'type' => 'text',
+                'type' => 'ax402_base_url',
+                'description' => sprintf(
+                    /* translators: %s: environment variable name */
+                    __('Development and testing only. This value cannot be edited here. Set %s to change it.', 'ax402-for-woocommerce'),
+                    '<code>AX402_BASE_URL</code>'
+                ),
                 'default' => $plugin['base_url'] ?: 'https://api.ax402.io',
             ],
             'api_key' => [
-                'title' => __('API key', 'ax402-for-woocommerce'),
-                'type' => 'password',
-                'description' => __(
-                    'Scoped ax402_live_… key with apiManager scopes. Leave blank to keep the current key.',
-                    'ax402-for-woocommerce'
+                'title' => __('Ax402 API Key', 'ax402-for-woocommerce'),
+                'type' => 'ax402_api_key',
+                'description' => sprintf(
+                    /* translators: 1: opening anchor tag, 2: closing anchor tag */
+                    __('Create a key at %1$sAx402%2$s: create an account, open API keys, name it something like “Ax402 for WooCommerce”, select All scopes, then click Create API Key. Enter a new key only when you want to replace the current one.', 'ax402-for-woocommerce'),
+                    '<a href="https://ax402.io" target="_blank" rel="noopener noreferrer">',
+                    '</a>'
                 ),
                 'default' => '',
             ],
@@ -119,9 +126,11 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
             'walletconnect_project_id' => [
                 'title' => __('WalletConnect project ID', 'ax402-for-woocommerce'),
                 'type' => 'text',
-                'description' => __(
-                    'Required for shoppers to connect Hedera wallets (HashPack, etc.). Unlock by enabling a Hedera settlement token.',
-                    'ax402-for-woocommerce'
+                'description' => sprintf(
+                    /* translators: 1: opening anchor tag, 2: closing anchor tag */
+                    __('Required for Hedera shopper wallets (HashPack, etc.). Get a project ID from %1$sReown%2$s: create an account, then create a project. Unlock this field by enabling a Hedera settlement token.', 'ax402-for-woocommerce'),
+                    '<a href="https://reown.com" target="_blank" rel="noopener noreferrer">',
+                    '</a>'
                 ),
                 'default' => $plugin['walletconnect_project_id'] ?? '',
                 'custom_attributes' => [
@@ -175,10 +184,10 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
                     'ax402-for-woocommerce'
                 ),
                 'description' => __(
-                    'Status polls always complete unpaid orders from a matching Ax402 settlement. Required because the gateway may call fulfill before the ledger row exists. Leave enabled.',
+                    'Off by default. When enabled, Ax402 settlements can complete unpaid orders if gateway fulfill is missing. Pay-page and agent status polls still confirm payment when this is off.',
                     'ax402-for-woocommerce'
                 ),
-                'default' => ($plugin['settlement_reconcile'] ?? 'yes') === 'yes' ? 'yes' : 'no',
+                'default' => ($plugin['settlement_reconcile'] ?? 'no') === 'yes' ? 'yes' : 'no',
             ],
             'ucp_enabled' => [
                 'title' => __('UCP for agents', 'ax402-for-woocommerce'),
@@ -188,10 +197,10 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
                     'ax402-for-woocommerce'
                 ),
                 'description' => __(
-                    'Off by default. Independent of the human checkout method. Buying agents discover the store, browse the catalog, and pay via x402 at checkout complete. Does not change the pay page or the legacy /wp-json/ax402/v1 agent API.',
+                    'On by default. Independent of the human checkout method. Buying agents discover the store, browse the catalog, and pay via x402 at checkout complete. Does not change the pay page or the legacy /wp-json/ax402/v1 agent API.',
                     'ax402-for-woocommerce'
                 ),
-                'default' => ($plugin['ucp_enabled'] ?? 'no') === 'yes' ? 'yes' : 'no',
+                'default' => ($plugin['ucp_enabled'] ?? 'yes') === 'yes' ? 'yes' : 'no',
             ],
             'ucp_max_amount' => [
                 'title' => __('UCP max payment (base units)', 'ax402-for-woocommerce'),
@@ -213,6 +222,129 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
                 'default' => 'no',
             ],
         ];
+    }
+
+    /**
+     * Read-only API base URL. Change via AX402_BASE_URL, not this screen.
+     *
+     * @param string $key
+     * @param array<string, mixed> $data
+     */
+    public function generate_ax402_base_url_html($key, $data): string
+    {
+        $field_key = $this->get_field_key($key);
+        $data = wp_parse_args($data, [
+            'title' => '',
+            'description' => '',
+            'css' => '',
+            'class' => '',
+        ]);
+        $value = Ax402_WC_Settings::all()['base_url'] ?: 'https://api.ax402.io';
+
+        ob_start();
+        ?>
+        <tr valign="top">
+            <th scope="row" class="titledesc">
+                <label for="<?php echo esc_attr($field_key); ?>"><?php echo esc_html((string) $data['title']); ?></label>
+            </th>
+            <td class="forminp">
+                <fieldset>
+                    <legend class="screen-reader-text"><span><?php echo esc_html((string) $data['title']); ?></span></legend>
+                    <input
+                        class="input-text regular-input <?php echo esc_attr((string) $data['class']); ?>"
+                        type="url"
+                        name="<?php echo esc_attr($field_key); ?>"
+                        id="<?php echo esc_attr($field_key); ?>"
+                        style="<?php echo esc_attr((string) $data['css']); ?>"
+                        value="<?php echo esc_attr($value); ?>"
+                        readonly="readonly"
+                        disabled="disabled"
+                        aria-readonly="true"
+                    />
+                    <?php if ((string) $data['description'] !== '') : ?>
+                        <p class="description"><?php echo $this->admin_field_description_html((string) $data['description']); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- wp_kses in helper. ?></p>
+                    <?php endif; ?>
+                </fieldset>
+            </td>
+        </tr>
+        <?php
+        return (string) ob_get_clean();
+    }
+
+    /**
+     * Masked API key. Submitted asterisks matching the stored length keep the current key.
+     *
+     * @param string $key
+     * @param array<string, mixed> $data
+     */
+    public function generate_ax402_api_key_html($key, $data): string
+    {
+        $field_key = $this->get_field_key($key);
+        $data = wp_parse_args($data, [
+            'title' => '',
+            'description' => '',
+            'css' => '',
+            'class' => '',
+        ]);
+        $current = Ax402_WC_Settings::all()['api_key'];
+        $mask = $current !== '' ? str_repeat('*', strlen($current)) : '';
+
+        ob_start();
+        ?>
+        <tr valign="top">
+            <th scope="row" class="titledesc">
+                <label for="<?php echo esc_attr($field_key); ?>"><?php echo esc_html((string) $data['title']); ?></label>
+            </th>
+            <td class="forminp">
+                <fieldset>
+                    <legend class="screen-reader-text"><span><?php echo esc_html((string) $data['title']); ?></span></legend>
+                    <input
+                        class="input-text regular-input <?php echo esc_attr((string) $data['class']); ?>"
+                        type="password"
+                        name="<?php echo esc_attr($field_key); ?>"
+                        id="<?php echo esc_attr($field_key); ?>"
+                        style="<?php echo esc_attr((string) $data['css']); ?>"
+                        value="<?php echo esc_attr($mask); ?>"
+                        autocomplete="new-password"
+                        spellcheck="false"
+                    />
+                    <?php if ((string) $data['description'] !== '') : ?>
+                        <p class="description"><?php echo $this->admin_field_description_html((string) $data['description']); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- wp_kses in helper. ?></p>
+                    <?php endif; ?>
+                </fieldset>
+            </td>
+        </tr>
+        <?php
+        return (string) ob_get_clean();
+    }
+
+    /**
+     * Ignore posted base URL (the input is disabled; this setting is env-only).
+     *
+     * @param string $key
+     * @param mixed $value
+     */
+    public function validate_ax402_base_url_field($key, $value): string
+    {
+        unset($key, $value);
+        return Ax402_WC_Settings::persisted_base_url();
+    }
+
+    /**
+     * Keep the stored key when the field is empty or still the display mask.
+     *
+     * @param string $key
+     * @param mixed $value
+     */
+    public function validate_ax402_api_key_field($key, $value): string
+    {
+        unset($key);
+        $submitted = trim((string) $value);
+        if ($this->submitted_api_key_unchanged($submitted)) {
+            return '';
+        }
+
+        return sanitize_text_field($submitted);
     }
 
     /**
@@ -528,18 +660,15 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
 
     public function sync_plugin_settings(): void
     {
-        $previous = Ax402_WC_Settings::all();
-
         $payload = [
-            'base_url' => (string) $this->get_option('base_url', 'https://api.ax402.io'),
             'pay_to_address' => (string) $this->get_option('pay_to_address', ''),
             'pay_to_hedera_account_id' => (string) $this->get_option('pay_to_hedera_account_id', ''),
             'walletconnect_project_id' => (string) $this->get_option('walletconnect_project_id', ''),
             'network_mode' => (string) $this->get_option('network_mode', 'sepolia'),
             'api_slug' => (string) $this->get_option('api_slug', ''),
             'enabled_token_ids' => $this->get_option('settlement_tokens', []),
-            'settlement_reconcile' => $this->get_option('settlement_reconcile', 'yes') === 'yes' ? 'yes' : 'no',
-            'ucp_enabled' => $this->get_option('ucp_enabled', 'no') === 'yes' ? 'yes' : 'no',
+            'settlement_reconcile' => $this->get_option('settlement_reconcile', 'no') === 'yes' ? 'yes' : 'no',
+            'ucp_enabled' => $this->get_option('ucp_enabled', 'yes') === 'yes' ? 'yes' : 'no',
             'ucp_max_amount' => (string) $this->get_option('ucp_max_amount', ''),
         ];
 
@@ -581,19 +710,6 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
             $this->update_option('api_key', '');
         }
 
-        $base_url_changed = strcasecmp(
-            rtrim($payload['base_url'], '/'),
-            rtrim($previous['base_url'], '/')
-        ) !== 0;
-
-        // Switching control planes invalidates the onboarded API id / host.
-        if ($base_url_changed) {
-            $payload['api_id'] = '';
-            $payload['gateway_host'] = '';
-            $payload['hedera_api_id'] = '';
-            $payload['hedera_gateway_host'] = '';
-        }
-
         Ax402_WC_Settings::update($payload);
 
         $refresh_key = $this->get_field_key('refresh_platform_tokens');
@@ -602,7 +718,6 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
         $refresh_requested = $refresh_posted !== '' && $refresh_posted !== '0';
 
         $should_refresh = $refresh_requested
-            || $base_url_changed
             || $api_key_changed
             || Ax402_WC_Platform_Config_Store::platform() === [];
 
@@ -789,5 +904,29 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
             'result' => 'success',
             'redirect' => Ax402_WC_Order_Payment::pay_page_url($order),
         ];
+    }
+
+    private function submitted_api_key_unchanged(string $submitted): bool
+    {
+        if ($submitted === '') {
+            return true;
+        }
+
+        $current = Ax402_WC_Settings::all()['api_key'];
+        return $current !== '' && $submitted === str_repeat('*', strlen($current));
+    }
+
+    private function admin_field_description_html(string $html): string
+    {
+        return wp_kses($html, [
+            'a' => [
+                'href' => true,
+                'target' => true,
+                'rel' => true,
+            ],
+            'code' => [],
+            'strong' => [],
+            'em' => [],
+        ]);
     }
 }

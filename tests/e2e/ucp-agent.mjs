@@ -2,7 +2,7 @@
  * UCP agent E2E: discover → search → cart → checkout → 402 → pay gateway → complete again.
  *
  * Requires:
- * - AX402_UCP_ENABLED=yes (re-seed with npm run env:e2e)
+ * - UCP enabled (on after seed unless AX402_UCP_ENABLED=no)
  * - AX402_API_KEY, AX402_PAY_TO_ADDRESS
  * - AX402_EVM_PRIVATE_KEY
  * - WP_BASE_URL publicly reachable by the Ax402 gateway

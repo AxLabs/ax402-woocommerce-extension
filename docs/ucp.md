@@ -6,7 +6,7 @@ Protocol version: **2026-04-08** (current `ucp.dev` release). Discovery advertis
 
 x402 payment on UCP follows **[ucp-x402-binding](https://github.com/AxLabs/ucp-x402-binding)** (this plugin implements the adapter era in that spec: 402 on shop complete, `resource.url` stays the Ax402 gateway).
 
-Humans keep using checkout → pay page. Legacy agents keep using `/wp-json/ax402/v1`. UCP is **off by default**.
+Humans keep using checkout → pay page. Legacy agents keep using `/wp-json/ax402/v1`. UCP is **on by default**.
 
 | Buyer | Surface |
 |---|---|
@@ -14,7 +14,7 @@ Humans keep using checkout → pay page. Legacy agents keep using `/wp-json/ax40
 | Legacy agent | `/wp-json/ax402/v1/products` + `/orders` (hands out `payment_url`) |
 | UCP agent | `GET /.well-known/ucp` + REST `/wp-json/ucp/v1` and MCP `/wp-json/ucp/v1/mcp` |
 
-Enable it in **WooCommerce → Settings → Payments → Ax402 → UCP for agents**. It does not require the human payment method to be offered at checkout, but it does require the same API key, pay-to address, and settlement tokens that `prepare()` already uses.
+Disable it in **WooCommerce → Settings → Payments → Ax402 → UCP for agents** if you do not want agent discovery. It does not require the human payment method to be offered at checkout, but it does require the same API key, pay-to address, and settlement tokens that `prepare()` already uses.
 
 ---
 
@@ -165,7 +165,7 @@ Cart and checkout share one Woo order. Cart id = checkout session id = Woo `orde
 
 | Option | Default | Meaning |
 |---|---|---|
-| `ucp_enabled` | `no` | Serves `/.well-known/ucp` and `/wp-json/ucp/v1` |
+| `ucp_enabled` | `yes` | Serves `/.well-known/ucp` and `/wp-json/ucp/v1` |
 | `ucp_max_amount` | empty | Optional digits-only `x402.max_amount` in the discovery handler |
 
 Uninstall still deletes `ax402_wc_settings` (covers the new keys). The profile is cached 5 minutes and busted on settings save.
@@ -210,7 +210,7 @@ Unit tests do not boot WordPress. They lock the protocol rules (cents, discovery
 
 Seed a shippable SKU `ax402-ship-box` plus a US flat-rate zone for the physical path. Virtual path uses `ax402-micropay` ($0.01). Sub-cent SKUs (`ax402-signal`, `ax402-dust`) must **not** appear in UCP search.
 
-Set `AX402_UCP_ENABLED=yes` in `.env` and re-run `npm run env:e2e` so seed writes `ucp_enabled`.
+Seed writes `ucp_enabled=yes` unless `AX402_UCP_ENABLED=no` (then re-run `npm run env:e2e`).
 
 Out of this version: discount capability, A2A, HTTP Message Signatures, rewriting x402 `resource` to the shop URL.
 

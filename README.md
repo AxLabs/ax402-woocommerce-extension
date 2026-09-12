@@ -13,7 +13,7 @@ This is a gateway extension — not a full storefront. Catalog, cart, customers,
 - Per-order gateway endpoint with multi-token `accepts[]`, priced from the USD cart total
 - Human pay page: settlement picker, network switch + balance checks, `@ax402/react-paywall`
 - Agent REST: products, create order, order status (same multi-accept payment URL)
-- Optional UCP for buying agents (`/.well-known/ucp`, `/wp-json/ucp/v1`) — off by default; see [docs/ucp.md](docs/ucp.md) and [ucp-x402-binding](https://github.com/AxLabs/ucp-x402-binding)
+- UCP for buying agents (`/.well-known/ucp`, `/wp-json/ucp/v1`) — on by default; see [docs/ucp.md](docs/ucp.md) and [ucp-x402-binding](https://github.com/AxLabs/ucp-x402-binding)
 - Fulfill upstream: valid `order_key` + token ACKs HTTP 200; `payment_complete()` only with a matching Ax402 settlement
 - `wp-env` local development + demo product seed
 - Unit + live control-plane tests
@@ -75,7 +75,7 @@ Full E2E (tunnel + pay): [docs/e2e.md](docs/e2e.md).
 npm test                 # PHP unit + integration + JS unit
 npm run test:live-cp     # needs AX402_API_KEY (+ PAY_TO for create/delete)
 npm run test:e2e-pay     # needs public WP_BASE_URL + buyer key (see docs/e2e.md)
-npm run test:e2e-ucp     # UCP agent flow; set AX402_UCP_ENABLED=yes then re-seed
+npm run test:e2e-ucp     # UCP agent flow (on by default after seed; AX402_UCP_ENABLED=no to disable)
 ```
 
 See [docs/testing.md](docs/testing.md) and [docs/e2e.md](docs/e2e.md).

@@ -29,6 +29,15 @@ npx wp-env run cli wp wc update --user=1 || true
 SEED_GATEWAY_FILE="$ROOT/plugin/.seed-gateway.json"
 python3 - <<'PY' > "$SEED_GATEWAY_FILE"
 import json, os
+
+def yes_no(name, default):
+    raw = (os.environ.get(name) or "").strip().lower()
+    if raw in ("no", "0", "false", "off"):
+        return "no"
+    if raw in ("yes", "1", "true", "on"):
+        return "yes"
+    return default
+
 print(json.dumps({
   "base_url": os.environ.get("AX402_BASE_URL") or "https://api.ax402.io",
   "pay_to_address": os.environ.get("AX402_PAY_TO_ADDRESS") or "",
@@ -36,7 +45,7 @@ print(json.dumps({
   "walletconnect_project_id": os.environ.get("AX402_WALLETCONNECT_PROJECT_ID") or "",
   "network_mode": os.environ.get("AX402_NETWORK") or "sepolia",
   "api_key": os.environ.get("AX402_API_KEY") or "",
-  "ucp_enabled": "yes" if os.environ.get("AX402_UCP_ENABLED") == "yes" else "no",
+  "ucp_enabled": yes_no("AX402_UCP_ENABLED", "yes"),
 }))
 PY
 trap 'rm -f "$SEED_GATEWAY_FILE"' EXIT
@@ -63,9 +72,7 @@ $current = get_option("woocommerce_ax402_settings", []);
 if (!is_array($current)) {
   $current = [];
 }
-if (($incoming["ucp_enabled"] ?? "") === "yes") {
-  $gateway["ucp_enabled"] = "yes";
-}
+$gateway["ucp_enabled"] = (($incoming["ucp_enabled"] ?? "yes") === "yes") ? "yes" : "no";
 foreach (["base_url", "pay_to_address", "pay_to_hedera_account_id", "walletconnect_project_id", "network_mode"] as $key) {
   if ($gateway[$key] === "" && !empty($current[$key])) {
     $gateway[$key] = (string) $current[$key];
@@ -91,9 +98,7 @@ if (class_exists("Ax402_WC_Settings")) {
   if ($api_key !== "") {
     $plugin_update["api_key"] = $api_key;
   }
-  if (($incoming["ucp_enabled"] ?? "") === "yes") {
-    $plugin_update["ucp_enabled"] = "yes";
-  }
+  $plugin_update["ucp_enabled"] = $gateway["ucp_enabled"];
   Ax402_WC_Settings::update($plugin_update);
 }
 

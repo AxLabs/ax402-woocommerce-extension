@@ -2,7 +2,7 @@
 
 This guide walks from a clean clone to a working WordPress + WooCommerce shop with the Ax402 payment gateway, demo products, and (optionally) a public tunnel for real payments.
 
-For product context and what the plugin is *for*, see [context.md](context.md). Agent UCP (opt-in): [ucp.md](ucp.md). x402 on UCP: [ucp-x402-binding](https://github.com/AxLabs/ucp-x402-binding).
+For product context and what the plugin is *for*, see [context.md](context.md). Agent UCP (on by default): [ucp.md](ucp.md). x402 on UCP: [ucp-x402-binding](https://github.com/AxLabs/ucp-x402-binding).
 
 ---
 
@@ -43,7 +43,7 @@ Edit `.env` (never commit it):
 
 | Variable | Required for | Description |
 |---|---|---|
-| `AX402_BASE_URL` | Seed / runtime | Default `https://api.ax402.io` |
+| `AX402_BASE_URL` | Seed / runtime overlay | Default `https://api.ax402.io`. Admin field is read-only; set this env var and re-seed to change it. |
 | `AX402_API_KEY` | Gateway available at checkout | Seller `ax402_live_…` key |
 | `AX402_PAY_TO_ADDRESS` | Gateway available at checkout | EVM address that receives USDC |
 | `AX402_NETWORK` | Seed / gateway | `sepolia` or `mainnet` |

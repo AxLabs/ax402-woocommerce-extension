@@ -48,8 +48,8 @@ final class Ax402_WC_Settings
             'hedera_gateway_host' => '',
             'hedera_api_slug' => '',
             'enabled_token_ids' => [],
-            'settlement_reconcile' => 'yes',
-            'ucp_enabled' => 'no',
+            'settlement_reconcile' => 'no',
+            'ucp_enabled' => 'yes',
             'ucp_max_amount' => '',
         ];
 
@@ -78,13 +78,18 @@ final class Ax402_WC_Settings
             $token_ids
         )));
 
-        $reconcile = strtolower((string) ($merged['settlement_reconcile'] ?? 'yes'));
+        $reconcile = strtolower((string) ($merged['settlement_reconcile'] ?? 'no'));
         if (!in_array($reconcile, ['yes', 'no'], true)) {
-            $reconcile = 'yes';
+            $reconcile = 'no';
         }
 
+        $env_base = self::environment_base_url();
+        $stored_base = trim((string) $merged['base_url']);
+
         return [
-            'base_url' => (string) $merged['base_url'],
+            'base_url' => $env_base !== ''
+                ? $env_base
+                : ($stored_base !== '' ? $stored_base : 'https://api.ax402.io'),
             'api_key' => (string) $merged['api_key'],
             'pay_to_address' => (string) $merged['pay_to_address'],
             'pay_to_hedera_account_id' => (string) $merged['pay_to_hedera_account_id'],
@@ -101,9 +106,44 @@ final class Ax402_WC_Settings
             'hedera_api_slug' => (string) $merged['hedera_api_slug'],
             'enabled_token_ids' => $token_ids,
             'settlement_reconcile' => $reconcile,
-            'ucp_enabled' => self::sanitize_yes_no($merged['ucp_enabled'] ?? 'no'),
+            'ucp_enabled' => self::sanitize_yes_no($merged['ucp_enabled'] ?? 'yes'),
             'ucp_max_amount' => self::sanitize_max_amount($merged['ucp_max_amount'] ?? ''),
         ];
+    }
+
+    /**
+     * AX402_BASE_URL when set in the PHP process. Empty means use the stored option.
+     */
+    public static function environment_base_url(): string
+    {
+        $raw = getenv('AX402_BASE_URL');
+        if (!is_string($raw) || trim($raw) === '') {
+            $from_env = $_ENV['AX402_BASE_URL'] ?? '';
+            $raw = is_string($from_env) ? $from_env : '';
+        }
+        $raw = trim($raw);
+        if ($raw === '') {
+            return '';
+        }
+
+        return self::sanitize_base_url($raw);
+    }
+
+    /**
+     * Stored API base URL without applying AX402_BASE_URL.
+     */
+    public static function persisted_base_url(): string
+    {
+        $stored = get_option(self::OPTION_KEY, []);
+        if (!is_array($stored)) {
+            $stored = [];
+        }
+        $url = trim((string) ($stored['base_url'] ?? ''));
+        if ($url === '') {
+            return 'https://api.ax402.io';
+        }
+
+        return self::sanitize_base_url($url) ?: 'https://api.ax402.io';
     }
 
     public static function ucp_enabled(): bool
@@ -184,9 +224,9 @@ final class Ax402_WC_Settings
         }
 
         $next = [
-            'base_url' => isset($input['base_url'])
-                ? esc_url_raw((string) $input['base_url'])
-                : $current['base_url'],
+            'base_url' => array_key_exists('base_url', $input)
+                ? (self::sanitize_base_url((string) $input['base_url']) ?: self::persisted_base_url())
+                : self::persisted_base_url(),
             'pay_to_address' => isset($input['pay_to_address'])
                 ? sanitize_text_field((string) $input['pay_to_address'])
                 : $current['pay_to_address'],
@@ -275,6 +315,19 @@ final class Ax402_WC_Settings
             static fn ($id): string => sanitize_text_field((string) $id),
             $ids
         ))));
+    }
+
+    private static function sanitize_base_url(string $url): string
+    {
+        $url = trim($url);
+        if ($url === '') {
+            return '';
+        }
+        if (function_exists('esc_url_raw')) {
+            return (string) esc_url_raw($url);
+        }
+
+        return $url;
     }
 
     private static function sanitize_yes_no(mixed $value): string
