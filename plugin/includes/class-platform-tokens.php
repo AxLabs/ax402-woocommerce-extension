@@ -113,6 +113,27 @@ final class Ax402_WC_Platform_Tokens
         return false;
     }
 
+    /**
+     * True when enabled token ids include any non-Hedera (EVM) token.
+     *
+     * @param array<string, mixed> $platform
+     * @param list<string> $enabled_token_ids
+     */
+    public static function has_evm_token_enabled(array $platform, array $enabled_token_ids): bool
+    {
+        foreach ($enabled_token_ids as $token_id) {
+            $token = self::find_token_by_id($platform, $token_id);
+            if ($token === null) {
+                continue;
+            }
+            if (!self::is_hedera_network((string) ($token['network'] ?? ''))) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public static function is_native_asset(string $asset): bool
     {
         $asset = strtolower(trim($asset));

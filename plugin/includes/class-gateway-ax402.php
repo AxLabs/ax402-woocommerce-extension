@@ -14,9 +14,15 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
     {
         $this->id = self::GATEWAY_ID;
         $this->method_title = __('Ax402 (x402)', 'ax402-for-woocommerce');
-        $this->method_description = __(
-            'Ax402 is an x402 payment provider for shoppers and agents, with Universal Commerce Protocol (UCP) support. Catalog currency stays USD.',
-            'ax402-for-woocommerce'
+        $this->method_description = sprintf(
+            /* translators: 1: Ax402 link open, 2: close, 3: x402 link open, 4: close, 5: UCP link open, 6: close */
+            __('%1$sAx402%2$s is an %3$sx402%4$s payment provider for shoppers and agents, with Universal Commerce Protocol (%5$sUCP%6$s) support. Catalog currency stays USD while you charge on stablecoins and other supported tokens.', 'ax402-for-woocommerce'),
+            '<a href="https://ax402.io" target="_blank" rel="noopener noreferrer">',
+            '</a>',
+            '<a href="https://x402.org" target="_blank" rel="noopener noreferrer">',
+            '</a>',
+            '<a href="https://ucp.dev" target="_blank" rel="noopener noreferrer">',
+            '</a>'
         );
         $this->has_fields = false;
         $this->supports = ['products'];
@@ -43,6 +49,48 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
             [$this, 'process_admin_options']
         );
         add_action('woocommerce_update_options_payment_gateways_' . $this->id, [$this, 'sync_plugin_settings']);
+        add_action('admin_enqueue_scripts', [$this, 'enqueue_admin_settings_assets']);
+    }
+
+    public function enqueue_admin_settings_assets(string $hook): void
+    {
+        if ($hook !== 'woocommerce_page_wc-settings') {
+            return;
+        }
+        // phpcs:ignore WordPress.Security.NonceVerification.Recommended -- distinguishing the settings section.
+        $section = isset($_GET['section']) ? sanitize_text_field(wp_unslash($_GET['section'])) : '';
+        if ($section !== $this->id) {
+            return;
+        }
+
+        wp_enqueue_style(
+            'ax402-wc-admin-settings',
+            AX402_WC_PLUGIN_URL . 'assets/admin-settings.css',
+            [],
+            AX402_WC_VERSION
+        );
+        wp_enqueue_script(
+            'ax402-wc-admin-settings',
+            AX402_WC_PLUGIN_URL . 'assets/admin-settings.js',
+            [],
+            AX402_WC_VERSION,
+            true
+        );
+        wp_localize_script(
+            'ax402-wc-admin-settings',
+            'ax402AdminSettings',
+            [
+                'showAdvanced' => __('Show', 'ax402-for-woocommerce'),
+                'hideAdvanced' => __('Hide', 'ax402-for-woocommerce'),
+                'copied' => __('Copied', 'ax402-for-woocommerce'),
+            ]
+        );
+    }
+
+    public function admin_options(): void
+    {
+        $this->render_readiness_card();
+        parent::admin_options();
     }
 
     /**
@@ -70,21 +118,19 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
         $plugin = Ax402_WC_Settings::all();
 
         $this->form_fields = [
+            'account_title' => [
+                'title' => __('Account', 'ax402-for-woocommerce'),
+                'type' => 'title',
+                'description' => __(
+                    'Connect this store to Ax402. Enabling the method only offers it at checkout once the checklist above is ready.',
+                    'ax402-for-woocommerce'
+                ),
+            ],
             'enabled' => [
                 'title' => __('Enable/Disable', 'ax402-for-woocommerce'),
                 'type' => 'checkbox',
                 'label' => __('Enable Ax402 payments', 'ax402-for-woocommerce'),
                 'default' => 'no',
-            ],
-            'base_url' => [
-                'title' => __('Ax402 API base URL', 'ax402-for-woocommerce'),
-                'type' => 'ax402_base_url',
-                'description' => sprintf(
-                    /* translators: %s: environment variable name */
-                    __('Development and testing only. This value cannot be edited here. Set %s to change it.', 'ax402-for-woocommerce'),
-                    '<code>AX402_BASE_URL</code>'
-                ),
-                'default' => $plugin['base_url'] ?: 'https://api.ax402.io',
             ],
             'api_key' => [
                 'title' => __('Ax402 API Key', 'ax402-for-woocommerce'),
@@ -96,6 +142,14 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
                     '</a>'
                 ),
                 'default' => '',
+            ],
+            'payout_title' => [
+                'title' => __('Payout wallets', 'ax402-for-woocommerce'),
+                'type' => 'title',
+                'description' => __(
+                    'Where settlements are sent. Hedera fields unlock when you enable a Hedera settlement token.',
+                    'ax402-for-woocommerce'
+                ),
             ],
             'pay_to_address' => [
                 'title' => __('EVM pay-to wallet', 'ax402-for-woocommerce'),
@@ -138,18 +192,10 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
                     'data-ax402-hedera-payto' => '1',
                 ],
             ],
-            'network_mode' => [
-                'title' => __('Environment seed', 'ax402-for-woocommerce'),
-                'type' => 'select',
-                'description' => __(
-                    'Only used for Ax402 gateway hostname onboarding (dev vs production platform domain). Settlement networks and tokens always come from the live platform sync below.',
-                    'ax402-for-woocommerce'
-                ),
-                'options' => [
-                    'sepolia' => __('Development / test domains', 'ax402-for-woocommerce'),
-                    'mainnet' => __('Production domain', 'ax402-for-woocommerce'),
-                ],
-                'default' => $plugin['network_mode'] ?: 'sepolia',
+            'tokens_title' => [
+                'title' => __('Settlement tokens', 'ax402-for-woocommerce'),
+                'type' => 'title',
+                'description' => '',
             ],
             'settlement_tokens' => [
                 'title' => __('Settlement tokens', 'ax402-for-woocommerce'),
@@ -159,35 +205,19 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
                     'ax402-for-woocommerce'
                 ),
             ],
-            'gateway_cors' => [
-                'title' => __('Gateway CORS', 'ax402-for-woocommerce'),
-                'type' => 'ax402_cors_status',
-                'description' => __(
-                    'Store origins are pushed to Ax402 so the pay page can call the gateway directly from the browser.',
-                    'ax402-for-woocommerce'
-                ),
+            'recent_title' => [
+                'title' => __('Recent payments', 'ax402-for-woocommerce'),
+                'type' => 'title',
+                'description' => '',
             ],
-            'api_slug' => [
-                'title' => __('Gateway slug', 'ax402-for-woocommerce'),
-                'type' => 'text',
-                'description' => __(
-                    'Optional. Used when creating the store API on Ax402. Leave blank to auto-generate.',
-                    'ax402-for-woocommerce'
-                ),
-                'default' => $plugin['api_slug'],
+            'recent_payments' => [
+                'title' => __('Latest settlements', 'ax402-for-woocommerce'),
+                'type' => 'ax402_recent_payments',
             ],
-            'settlement_reconcile' => [
-                'title' => __('Settlement reconcile', 'ax402-for-woocommerce'),
-                'type' => 'checkbox',
-                'label' => __(
-                    'Complete unpaid orders from Ax402 settlements when gateway fulfill is missing',
-                    'ax402-for-woocommerce'
-                ),
-                'description' => __(
-                    'Off by default. When enabled, Ax402 settlements can complete unpaid orders if gateway fulfill is missing. Pay-page and agent status polls still confirm payment when this is off.',
-                    'ax402-for-woocommerce'
-                ),
-                'default' => ($plugin['settlement_reconcile'] ?? 'no') === 'yes' ? 'yes' : 'no',
+            'agents_title' => [
+                'title' => __('Agents', 'ax402-for-woocommerce'),
+                'type' => 'title',
+                'description' => '',
             ],
             'ucp_enabled' => [
                 'title' => __('UCP for agents', 'ax402-for-woocommerce'),
@@ -211,6 +241,11 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
                 ),
                 'default' => (string) ($plugin['ucp_max_amount'] ?? ''),
             ],
+            'checkout_title' => [
+                'title' => __('Checkout', 'ax402-for-woocommerce'),
+                'type' => 'title',
+                'description' => '',
+            ],
             'show_powered_by' => [
                 'title' => __('Pay page credit', 'ax402-for-woocommerce'),
                 'type' => 'checkbox',
@@ -220,6 +255,65 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
                     'ax402-for-woocommerce'
                 ),
                 'default' => 'no',
+            ],
+            'advanced_title' => [
+                'title' => __('Advanced', 'ax402-for-woocommerce'),
+                'type' => 'title',
+                'class' => 'ax402-advanced-heading',
+                'description' => '',
+            ],
+            'base_url' => [
+                'title' => __('Ax402 API base URL', 'ax402-for-woocommerce'),
+                'type' => 'ax402_base_url',
+                'description' => sprintf(
+                    /* translators: %s: environment variable name */
+                    __('Development and testing only. This value cannot be edited here. Set %s to change it.', 'ax402-for-woocommerce'),
+                    '<code>AX402_BASE_URL</code>'
+                ),
+                'default' => $plugin['base_url'] ?: 'https://api.ax402.io',
+            ],
+            'network_mode' => [
+                'title' => __('Environment seed', 'ax402-for-woocommerce'),
+                'type' => 'select',
+                'description' => __(
+                    'Only used for Ax402 gateway hostname onboarding (dev vs production platform domain). Settlement networks and tokens always come from the live platform sync below.',
+                    'ax402-for-woocommerce'
+                ),
+                'options' => [
+                    'sepolia' => __('Development / test domains', 'ax402-for-woocommerce'),
+                    'mainnet' => __('Production domain', 'ax402-for-woocommerce'),
+                ],
+                'default' => $plugin['network_mode'] ?: 'sepolia',
+            ],
+            'api_slug' => [
+                'title' => __('Gateway slug', 'ax402-for-woocommerce'),
+                'type' => 'text',
+                'description' => __(
+                    'Optional. Used when creating the store API on Ax402. Leave blank to auto-generate.',
+                    'ax402-for-woocommerce'
+                ),
+                'default' => $plugin['api_slug'],
+            ],
+            'gateway_cors' => [
+                'title' => __('Gateway CORS', 'ax402-for-woocommerce'),
+                'type' => 'ax402_cors_status',
+                'description' => __(
+                    'Store origins are pushed to Ax402 so the pay page can call the gateway directly from the browser.',
+                    'ax402-for-woocommerce'
+                ),
+            ],
+            'settlement_reconcile' => [
+                'title' => __('Settlement reconcile', 'ax402-for-woocommerce'),
+                'type' => 'checkbox',
+                'label' => __(
+                    'Complete unpaid orders from Ax402 settlements when gateway fulfill is missing',
+                    'ax402-for-woocommerce'
+                ),
+                'description' => __(
+                    'Off by default. When enabled, Ax402 settlements can complete unpaid orders if gateway fulfill is missing. Pay-page and agent status polls still confirm payment when this is off.',
+                    'ax402-for-woocommerce'
+                ),
+                'default' => ($plugin['settlement_reconcile'] ?? 'no') === 'yes' ? 'yes' : 'no',
             ],
         ];
     }
@@ -319,6 +413,99 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
     }
 
     /**
+     * Last settlements from Ax402 for this store API.
+     *
+     * @param string $key
+     * @param array<string, mixed> $data
+     */
+    public function generate_ax402_recent_payments_html($key, $data): string
+    {
+        unset($key);
+        $data = wp_parse_args($data, [
+            'title' => '',
+        ]);
+        $snapshot = Ax402_WC_Recent_Settlements::snapshot();
+
+        ob_start();
+        ?>
+        <tr valign="top">
+            <th scope="row" class="titledesc">
+                <label><?php echo esc_html((string) $data['title']); ?></label>
+            </th>
+            <td class="forminp">
+                <div class="ax402-recent-payments">
+                    <?php if (!$snapshot['connected']) : ?>
+                        <p class="ax402-recent-payments__empty">
+                            <?php echo esc_html__('Payments will appear here after the store is connected.', 'ax402-for-woocommerce'); ?>
+                        </p>
+                    <?php elseif ($snapshot['error'] !== '') : ?>
+                        <p class="ax402-recent-payments__empty">
+                            <?php echo esc_html($snapshot['error']); ?>
+                        </p>
+                    <?php elseif ($snapshot['rows'] === []) : ?>
+                        <p class="ax402-recent-payments__empty">
+                            <?php echo esc_html__('No payments yet.', 'ax402-for-woocommerce'); ?>
+                        </p>
+                    <?php else : ?>
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th><?php echo esc_html__('When', 'ax402-for-woocommerce'); ?></th>
+                                    <th><?php echo esc_html__('Amount', 'ax402-for-woocommerce'); ?></th>
+                                    <th><?php echo esc_html__('Network', 'ax402-for-woocommerce'); ?></th>
+                                    <th><?php echo esc_html__('Transaction', 'ax402-for-woocommerce'); ?></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($snapshot['rows'] as $row) : ?>
+                                    <tr>
+                                        <td class="ax402-recent-payments__when">
+                                            <?php echo esc_html($row['when']); ?>
+                                            <?php if ($row['when_tz'] !== '') : ?>
+                                                <span class="ax402-recent-payments__when-tz"><?php echo esc_html($row['when_tz']); ?></span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td><?php echo esc_html($row['amount']); ?></td>
+                                        <td><?php echo esc_html($row['network']); ?></td>
+                                        <td>
+                                            <div class="ax402-recent-payments__tx">
+                                                <code><?php echo esc_html($row['tx']); ?></code>
+                                                <?php if ($row['tx_full'] !== '') : ?>
+                                                    <button
+                                                        type="button"
+                                                        class="ax402-copy-tx"
+                                                        data-ax402-copy="<?php echo esc_attr($row['tx_full']); ?>"
+                                                        aria-label="<?php echo esc_attr__('Copy transaction', 'ax402-for-woocommerce'); ?>"
+                                                    >
+                                                        <span class="dashicons dashicons-admin-page" aria-hidden="true"></span>
+                                                        <span class="dashicons dashicons-yes" aria-hidden="true"></span>
+                                                    </button>
+                                                <?php endif; ?>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                                <?php if (!empty($snapshot['has_more'])) : ?>
+                                    <tr class="ax402-recent-payments__more">
+                                        <td colspan="4">...</td>
+                                    </tr>
+                                <?php endif; ?>
+                            </tbody>
+                        </table>
+                    <?php endif; ?>
+                    <p class="ax402-recent-payments__income">
+                        <a href="<?php echo esc_url(Ax402_WC_Recent_Settlements::INCOME_URL); ?>" target="_blank" rel="noopener noreferrer">
+                            <?php echo esc_html__('View all income on Ax402', 'ax402-for-woocommerce'); ?>
+                        </a>
+                    </p>
+                </div>
+            </td>
+        </tr>
+        <?php
+        return (string) ob_get_clean();
+    }
+
+    /**
      * Ignore posted base URL (the input is disabled; this setting is env-only).
      *
      * @param string $key
@@ -345,6 +532,56 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
         }
 
         return sanitize_text_field($submitted);
+    }
+
+    /**
+     * @param string $key
+     * @param mixed $value
+     */
+    public function validate_ax402_recent_payments_field($key, $value): string
+    {
+        unset($key, $value);
+        return '';
+    }
+
+    /**
+     * @param string $key
+     * @param mixed $value
+     */
+    public function validate_pay_to_address_field($key, $value): string
+    {
+        $submitted = trim((string) $value);
+        $parsed = Ax402_WC_Evm_Address::parse($submitted);
+        if ($parsed['ok']) {
+            return $parsed['checksummed'];
+        }
+
+        $message = Ax402_WC_Evm_Address::error_message($parsed['error']);
+        if ($message !== '') {
+            WC_Admin_Settings::add_error($message);
+        }
+
+        return (string) $this->get_option($key, '');
+    }
+
+    /**
+     * @param string $key
+     * @param mixed $value
+     */
+    public function validate_pay_to_hedera_account_id_field($key, $value): string
+    {
+        $submitted = trim(sanitize_text_field((string) $value));
+        $parsed = Ax402_WC_Settings::parse_hedera_account_id($submitted);
+        if ($parsed['ok']) {
+            return $parsed['value'];
+        }
+
+        $message = Ax402_WC_Settings::hedera_error_message($parsed['error']);
+        if ($message !== '') {
+            WC_Admin_Settings::add_error($message);
+        }
+
+        return (string) $this->get_option($key, '');
     }
 
     /**
@@ -681,11 +918,28 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
             $platform_preview,
             $payload['enabled_token_ids']
         );
+        $needs_evm = Ax402_WC_Settings_Readiness::needs_evm(
+            $platform_preview,
+            $payload['enabled_token_ids']
+        );
+
+        $evm = Ax402_WC_Evm_Address::parse($payload['pay_to_address']);
+        if ($evm['ok'] && $evm['checksummed'] !== '') {
+            $payload['pay_to_address'] = $evm['checksummed'];
+            $this->update_option('pay_to_address', $evm['checksummed']);
+        } elseif ($needs_evm && $evm['ok'] && $evm['checksummed'] === '') {
+            WC_Admin_Settings::add_error(
+                __('Enable EVM settlements requires a valid EVM pay-to wallet.', 'ax402-for-woocommerce')
+            );
+        }
+
+        $hedera_parsed = Ax402_WC_Settings::parse_hedera_account_id($payload['pay_to_hedera_account_id']);
+        if ($hedera_parsed['ok']) {
+            $payload['pay_to_hedera_account_id'] = $hedera_parsed['value'];
+            $this->update_option('pay_to_hedera_account_id', $hedera_parsed['value']);
+        }
         if ($needs_hedera) {
-            $hedera = Ax402_WC_Settings::sanitize_hedera_account_id($payload['pay_to_hedera_account_id']);
-            $payload['pay_to_hedera_account_id'] = $hedera;
-            $this->update_option('pay_to_hedera_account_id', $hedera);
-            if ($hedera === '') {
+            if ($hedera_parsed['ok'] && $hedera_parsed['value'] === '') {
                 WC_Admin_Settings::add_error(
                     __('Enable Hedera settlements requires a valid Hedera pay-to account id (0.0.x).', 'ax402-for-woocommerce')
                 );
@@ -695,11 +949,6 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
                     __('Enable Hedera settlements requires a WalletConnect project ID for shopper wallets.', 'ax402-for-woocommerce')
                 );
             }
-        } else {
-            // Keep stored value but fields stay greyed in UI when no Hedera token.
-            $payload['pay_to_hedera_account_id'] = Ax402_WC_Settings::sanitize_hedera_account_id(
-                $payload['pay_to_hedera_account_id']
-            );
         }
 
         $api_key = (string) $this->get_option('api_key', '');
@@ -742,7 +991,7 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
                 }
 
                 $selected = array_values(array_intersect($payload['enabled_token_ids'], $valid_ids));
-                if ($selected === [] && ($base_url_changed || $api_key_changed || $refresh_requested)) {
+                if ($selected === [] && ($api_key_changed || $refresh_requested)) {
                     $selected = Ax402_WC_Platform_Tokens::default_enabled_token_ids(
                         $platform,
                         $payload['network_mode']
@@ -755,7 +1004,7 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
                     $this->update_option('settlement_tokens', $selected);
                 }
 
-                if ($base_url_changed || $api_key_changed || $refresh_requested) {
+                if ($api_key_changed || $refresh_requested) {
                     WC_Admin_Settings::add_message(
                         sprintf(
                             /* translators: %d: token count */
@@ -821,54 +1070,7 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
 
     public function is_available(): bool
     {
-        if (!parent::is_available()) {
-            return false;
-        }
-        if (get_woocommerce_currency() !== 'USD') {
-            return false;
-        }
-
-        $settings = Ax402_WC_Settings::all();
-        if ($settings['api_key'] === '') {
-            return false;
-        }
-
-        $token_ids = Ax402_WC_Settings::enabled_token_ids();
-        if ($token_ids === []) {
-            return false;
-        }
-
-        $platform = Ax402_WC_Platform_Config_Store::platform();
-        $needs_hedera = Ax402_WC_Platform_Tokens::has_hedera_token_enabled($platform, $token_ids);
-        $needs_evm = false;
-        foreach ($token_ids as $token_id) {
-            $token = Ax402_WC_Platform_Tokens::find_token_by_id($platform, $token_id);
-            if ($token === null) {
-                continue;
-            }
-            if (!Ax402_WC_Platform_Tokens::is_hedera_network((string) ($token['network'] ?? ''))) {
-                $needs_evm = true;
-                break;
-            }
-        }
-        // Default seed tokens are EVM when platform cache is empty.
-        if ($platform === []) {
-            $needs_evm = true;
-        }
-
-        if ($needs_evm && $settings['pay_to_address'] === '') {
-            return false;
-        }
-        if ($needs_hedera) {
-            if (!Ax402_WC_Settings::is_valid_hedera_account_id($settings['pay_to_hedera_account_id'])) {
-                return false;
-            }
-            if (trim($settings['walletconnect_project_id']) === '') {
-                return false;
-            }
-        }
-
-        return true;
+        return parent::is_available() && Ax402_WC_Settings_Readiness::is_ready();
     }
 
     /**
@@ -904,6 +1106,74 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
             'result' => 'success',
             'redirect' => Ax402_WC_Order_Payment::pay_page_url($order),
         ];
+    }
+
+    private function render_readiness_card(): void
+    {
+        $ready = Ax402_WC_Settings_Readiness::is_ready();
+        $items = Ax402_WC_Settings_Readiness::items();
+        $enabled = $this->get_option('enabled', 'no') === 'yes';
+        $class = $ready ? 'is-ready' : 'is-not-ready';
+        ?>
+        <div class="ax402-readiness <?php echo esc_attr($class); ?>">
+            <p class="ax402-readiness__title">
+                <?php
+                echo $ready
+                    ? esc_html__('Ax402 is ready', 'ax402-for-woocommerce')
+                    : esc_html__('Ax402 is not ready', 'ax402-for-woocommerce');
+                ?>
+            </p>
+            <?php if ($ready && !$enabled) : ?>
+                <p class="ax402-readiness__note">
+                    <?php echo esc_html__('Turn on Enable Ax402 payments below to offer it at checkout.', 'ax402-for-woocommerce'); ?>
+                </p>
+            <?php elseif (!$ready) : ?>
+                <p class="ax402-readiness__note">
+                    <?php echo esc_html__('Finish the items below so this store can accept Ax402 payments.', 'ax402-for-woocommerce'); ?>
+                </p>
+            <?php endif; ?>
+            <ul class="ax402-readiness__list">
+                <?php foreach ($items as $item) :
+                    $ok = (bool) $item['ok'];
+                    ?>
+                    <li class="<?php echo $ok ? 'is-ok' : 'is-fail'; ?>">
+                        <span class="dashicons <?php echo $ok ? 'dashicons-yes' : 'dashicons-no'; ?>" aria-hidden="true"></span>
+                        <span>
+                            <?php echo esc_html((string) $item['label']); ?>
+                            <?php if (!$ok && (string) $item['fix'] !== '') : ?>
+                                <span class="ax402-readiness__fix">
+                                    <?php echo $this->readiness_fix_html($item); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- kses'd HTML. ?>
+                                </span>
+                            <?php endif; ?>
+                        </span>
+                    </li>
+                <?php endforeach; ?>
+            </ul>
+        </div>
+        <?php
+    }
+
+    /**
+     * @param array{id:string,ok:bool,label:string,fix:string} $item
+     */
+    private function readiness_fix_html(array $item): string
+    {
+        $fix = (string) $item['fix'];
+        if ($item['id'] === 'currency' && function_exists('admin_url')) {
+            return $this->admin_field_description_html(
+                $fix . ' '
+                . '<a href="' . esc_url(admin_url('admin.php?page=wc-settings&tab=general')) . '">'
+                . esc_html__('Open currency settings', 'ax402-for-woocommerce')
+                . '</a>'
+            );
+        }
+        if ($item['id'] === 'api_key') {
+            return $this->admin_field_description_html(
+                '<a href="#woocommerce_ax402_api_key">' . esc_html($fix) . '</a>'
+            );
+        }
+
+        return esc_html($fix);
     }
 
     private function submitted_api_key_unchanged(string $submitted): bool

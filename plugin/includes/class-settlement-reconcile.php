@@ -235,6 +235,33 @@ final class Ax402_WC_Settlement_Reconcile
     }
 
     /**
+     * Settlements for every onboarded store API (cached ~15s).
+     *
+     * @return list<array<string, mixed>>
+     */
+    public static function list_for_store(bool $bypass_cache = false): array
+    {
+        $client = Ax402_WC_Settings::client();
+        if ($client === null) {
+            return [];
+        }
+
+        $api_ids = Ax402_WC_Settings::configured_api_ids();
+        if ($api_ids === []) {
+            return [];
+        }
+
+        $settlements = [];
+        foreach ($api_ids as $api_id) {
+            foreach (self::fetch_settlements($client, $api_id, $bypass_cache) as $row) {
+                $settlements[] = $row;
+            }
+        }
+
+        return $settlements;
+    }
+
+    /**
      * @return list<array<string, mixed>>
      */
     private static function fetch_settlements(

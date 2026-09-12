@@ -15,5 +15,10 @@ final class HederaPayToSettingsTest extends TestCase
         $this->assertFalse(Ax402_WC_Settings::is_valid_hedera_account_id('0xabc'));
         $this->assertFalse(Ax402_WC_Settings::is_valid_hedera_account_id('not-an-id'));
         $this->assertFalse(Ax402_WC_Settings::is_valid_hedera_account_id(''));
+        $this->assertTrue(Ax402_WC_Settings::is_valid_hedera_account_id('0.0.12345-abcde'));
+        $parsed = Ax402_WC_Settings::parse_hedera_account_id('0.0.12345-abcde');
+        $this->assertTrue($parsed['ok']);
+        $this->assertSame('0.0.12345', $parsed['value']);
+        $this->assertSame('evm', Ax402_WC_Settings::parse_hedera_account_id('0xabc')['error']);
     }
 }

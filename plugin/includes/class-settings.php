@@ -185,7 +185,44 @@ final class Ax402_WC_Settings
 
     public static function is_valid_hedera_account_id(string $account_id): bool
     {
-        return preg_match('/^\d+\.\d+\.\d+$/', trim($account_id)) === 1;
+        $parsed = self::parse_hedera_account_id($account_id);
+        return $parsed['ok'] && $parsed['value'] !== '';
+    }
+
+    /**
+     * Accept 0.0.x, optionally with a HIP-15 checksum suffix (the suffix is stripped).
+     *
+     * @return array{ok:bool,value:string,error:string}
+     */
+    public static function parse_hedera_account_id(string $account_id): array
+    {
+        $value = trim($account_id);
+        if ($value === '') {
+            return ['ok' => true, 'value' => '', 'error' => ''];
+        }
+        if (str_starts_with(strtolower($value), '0x')) {
+            return ['ok' => false, 'value' => '', 'error' => 'evm'];
+        }
+        if (preg_match('/^(\d+\.\d+\.\d+)(?:-[a-z]{5})?$/i', $value, $matches) === 1) {
+            return ['ok' => true, 'value' => $matches[1], 'error' => ''];
+        }
+
+        return ['ok' => false, 'value' => '', 'error' => 'format'];
+    }
+
+    public static function hedera_error_message(string $error): string
+    {
+        return match ($error) {
+            'evm' => __(
+                'Hedera pay-to must be a Hedera account id (0.0.x), not an EVM address.',
+                'ax402-for-woocommerce'
+            ),
+            'format' => __(
+                'Hedera pay-to must look like 0.0.12345.',
+                'ax402-for-woocommerce'
+            ),
+            default => '',
+        };
     }
 
     /**
@@ -220,16 +257,21 @@ final class Ax402_WC_Settings
         $current = self::all();
         $hedera = $current['pay_to_hedera_account_id'];
         if (array_key_exists('pay_to_hedera_account_id', $input)) {
-            $hedera = self::sanitize_hedera_account_id((string) $input['pay_to_hedera_account_id']);
+            $parsed = self::parse_hedera_account_id((string) $input['pay_to_hedera_account_id']);
+            $hedera = $parsed['ok'] ? $parsed['value'] : $current['pay_to_hedera_account_id'];
+        }
+
+        $pay_to = $current['pay_to_address'];
+        if (array_key_exists('pay_to_address', $input)) {
+            $evm = Ax402_WC_Evm_Address::parse((string) $input['pay_to_address']);
+            $pay_to = $evm['ok'] ? $evm['checksummed'] : $current['pay_to_address'];
         }
 
         $next = [
             'base_url' => array_key_exists('base_url', $input)
                 ? (self::sanitize_base_url((string) $input['base_url']) ?: self::persisted_base_url())
                 : self::persisted_base_url(),
-            'pay_to_address' => isset($input['pay_to_address'])
-                ? sanitize_text_field((string) $input['pay_to_address'])
-                : $current['pay_to_address'],
+            'pay_to_address' => $pay_to,
             'pay_to_hedera_account_id' => $hedera,
             'walletconnect_project_id' => isset($input['walletconnect_project_id'])
                 ? sanitize_text_field((string) $input['walletconnect_project_id'])
@@ -287,18 +329,8 @@ final class Ax402_WC_Settings
 
     public static function sanitize_hedera_account_id(string $value): string
     {
-        $value = trim(sanitize_text_field($value));
-        if ($value === '') {
-            return '';
-        }
-        if (str_starts_with(strtolower($value), '0x')) {
-            return '';
-        }
-        if (!self::is_valid_hedera_account_id($value)) {
-            return '';
-        }
-
-        return $value;
+        $parsed = self::parse_hedera_account_id($value);
+        return $parsed['ok'] ? $parsed['value'] : '';
     }
 
     /**

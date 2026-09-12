@@ -69,6 +69,18 @@ if (!function_exists('wp_json_encode')) {
     }
 }
 
+if (!function_exists('__')) {
+    /**
+     * @param mixed $text
+     */
+    function __($text, $domain = null)
+    {
+        unset($domain);
+
+        return (string) $text;
+    }
+}
+
 require_once $plugin . '/includes/class-money.php';
 require_once $plugin . '/includes/class-platform-tokens.php';
 require_once $plugin . '/includes/class-control-plane-client.php';

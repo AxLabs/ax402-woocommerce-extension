@@ -1,0 +1,184 @@
+.ax402-readiness {
+	margin: 12px 0 20px;
+	padding: 16px 18px;
+	max-width: 52rem;
+	background: #fff;
+	border: 1px solid #c3c4c7;
+	border-left-width: 4px;
+	border-radius: 4px;
+	box-sizing: border-box;
+}
+
+.ax402-readiness.is-ready {
+	border-left-color: #00a32a;
+}
+
+.ax402-readiness.is-not-ready {
+	border-left-color: #d63638;
+}
+
+.ax402-readiness__title {
+	margin: 0 0 6px;
+	font-size: 14px;
+	font-weight: 600;
+	line-height: 1.4;
+}
+
+.ax402-readiness__note,
+.ax402-readiness__fix {
+	margin: 0 0 8px;
+	color: #50575e;
+}
+
+.ax402-readiness__list {
+	margin: 10px 0 0;
+	padding: 0;
+	list-style: none;
+}
+
+.ax402-readiness__list li {
+	display: flex;
+	gap: 8px;
+	align-items: flex-start;
+	margin: 0 0 8px;
+	line-height: 1.45;
+}
+
+.ax402-readiness__list .dashicons {
+	width: 18px;
+	height: 18px;
+	font-size: 18px;
+	margin-top: 1px;
+}
+
+.ax402-readiness__list .is-ok .dashicons {
+	color: #00a32a;
+}
+
+.ax402-readiness__list .is-fail .dashicons {
+	color: #d63638;
+}
+
+.ax402-readiness__list .is-fail .ax402-readiness__fix {
+	display: block;
+	margin: 2px 0 0;
+	font-size: 12px;
+}
+
+.ax402-recent-payments {
+	max-width: 52rem;
+}
+
+.ax402-recent-payments table {
+	width: 100%;
+	border-collapse: collapse;
+	background: #fff;
+}
+
+.ax402-recent-payments th,
+.ax402-recent-payments td {
+	padding: 8px 10px;
+	text-align: left;
+	border-bottom: 1px solid #dcdcde;
+	font-size: 13px;
+	vertical-align: middle;
+}
+
+.ax402-recent-payments th {
+	font-weight: 600;
+}
+
+.ax402-recent-payments__empty {
+	margin: 0 0 8px;
+	color: #50575e;
+}
+
+.ax402-recent-payments__income {
+	margin: 10px 0 0;
+}
+
+.ax402-recent-payments__when {
+	white-space: nowrap;
+}
+
+.ax402-recent-payments__when-tz {
+	margin-left: 0.35em;
+	color: #50575e;
+	font-weight: 500;
+}
+
+.ax402-recent-payments__tx {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex-wrap: wrap;
+}
+
+.ax402-copy-tx {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	margin: 0;
+	padding: 2px;
+	border: 0;
+	background: transparent;
+	color: #2271b1;
+	cursor: pointer;
+	line-height: 1;
+}
+
+.ax402-copy-tx .dashicons {
+	width: 16px;
+	height: 16px;
+	font-size: 16px;
+}
+
+.ax402-copy-tx:hover,
+.ax402-copy-tx:focus {
+	color: #135e96;
+}
+
+.ax402-copy-tx.is-copied {
+	color: #00a32a;
+}
+
+.ax402-copy-tx.is-copied .dashicons-admin-page {
+	display: none;
+}
+
+.ax402-copy-tx .dashicons-yes {
+	display: none;
+}
+
+.ax402-copy-tx.is-copied .dashicons-yes {
+	display: block;
+}
+
+.ax402-recent-payments__more td {
+	color: #50575e;
+	letter-spacing: 0.18em;
+	border-bottom: 0;
+}
+
+.woocommerce h2.wc-settings-sub-title,
+.woocommerce h3.wc-settings-sub-title {
+	margin: 1.6em 0 0.45em;
+	padding: 0;
+	font-size: 1.4em;
+	font-weight: 600;
+	line-height: 1.3;
+}
+
+.ax402-advanced-heading .ax402-advanced-toggle {
+	margin-left: 10px;
+	font-size: 13px;
+	font-weight: 400;
+	vertical-align: middle;
+	text-decoration: none;
+}
+
+.ax402-advanced-heading .ax402-advanced-toggle:focus {
+	box-shadow: none;
+	outline: 1px solid #2271b1;
+	outline-offset: 2px;
+}

@@ -18,6 +18,8 @@ Frontend assets in `build/` are produced from npm dependencies. Direct runtime d
 | `@x402/hedera` | Apache-2.0 |
 | `viem` | MIT |
 
+PHP Keccak-256 used for EIP-55 address checksums is adapted from [kornrunner/php-keccak](https://github.com/kornrunner/php-keccak) (MIT).
+
 Transitive packages pulled into the pay-page bundle (Hedera / WalletConnect / protobuf / etc.) are typically Apache-2.0 or MIT. Those licenses are **GPL-3.0-compatible**. This plugin uses **GPLv3 or later** (not GPLv2-only) so Apache-2.0 code may be distributed with it.
 
 Source for the frontend stack and build instructions:

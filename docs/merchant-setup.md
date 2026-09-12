@@ -6,13 +6,13 @@ For what this plugin owns vs WooCommerce, see [context.md](context.md).
 1. Create an Ax402 seller account at [ax402.io](https://ax402.io) and verify email.
 2. Create an API key with **All** scopes (name it e.g. “Ax402 for WooCommerce”).
 3. In WooCommerce → Settings → Payments → **Ax402 (x402)**:
-   - Enable the method
-   - Confirm **Ax402 API base URL** (read-only; change with `AX402_BASE_URL` for local/dev, then re-seed)
+   - The status card at the top shows whether the store is **ready** (USD catalog, API key, a settlement token, and the matching payout wallet). Ready does not depend on Enable/Disable. If something is missing, the checklist stays on screen and each failed row says how to fix it.
+   - Enable the method (offers Ax402 at checkout only when the checklist is ready)
    - Paste **Ax402 API Key** (create one at [ax402.io](https://ax402.io): API keys → name it e.g. “Ax402 for WooCommerce” → All scopes → Create API Key)
-   - Set **EVM pay-to** wallet (one address for all EVM networks)
+   - Set **EVM pay-to** wallet (one address for all EVM networks; invalid checksums are rejected on save)
    - Enable settlement tokens from Ax402 platform config. If any **Hedera** token is enabled, unlock and set **Hedera pay-to** account id (`0.0.x`) plus a **WalletConnect project ID** for shopper wallets
-   - Choose **default network seed** (Base Sepolia for testing, Base mainnet for production) — used for onboarding / default USDC when no tokens are selected yet
-   - Sync and enable **settlement tokens** (stablecoins settle 1:1 with the USD catalog total; other tokens use dated `/exchange-rates`; checkout creates one temporary Ax402 endpoint with every priced token in `accepts[]`)
+   - Recent payments lists the last five Ax402 settlements, with a link to [income on Ax402](https://ax402.io/dashboard/income)
+   - Advanced: API base URL is read-only (`AX402_BASE_URL` + re-seed to change). Environment seed is Base Sepolia vs production hostname onboarding
 4. Ensure store currency is **USD** (catalog). Shoppers still pay in the settlement token they pick on the pay page.
 5. For sub-cent catalog prices (e.g. `$0.001`), set **WooCommerce → Settings → General → Number of decimals** to at least **4** (USD defaults to 2, which displays those as `$0.00`). When Ax402 is enabled, the plugin raises display decimals to at least 4 and trims trailing zeros (so `$0.001` / `$0.10` render correctly).
 6. For local testing with real gateway upstream, expose the shop with a public tunnel and ensure Ax402 API `upstream_base_url` matches that public origin (re-onboard / update API if needed). Free ngrok requires the endpoint `upstream_auth` skip header — the plugin sets it automatically when `home_url` is an ngrok host (details in [architecture.md](architecture.md)).
