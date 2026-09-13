@@ -285,18 +285,22 @@ final class Ax402_WC_Settings
             'gateway_host' => isset($input['gateway_host'])
                 ? sanitize_text_field((string) $input['gateway_host'])
                 : $current['gateway_host'],
-            'api_slug' => isset($input['api_slug'])
-                ? sanitize_title((string) $input['api_slug'])
-                : $current['api_slug'],
+            'api_slug' => self::sanitize_optional_slug(
+                $input,
+                'api_slug',
+                $current['api_slug']
+            ),
             'hedera_api_id' => isset($input['hedera_api_id'])
                 ? sanitize_text_field((string) $input['hedera_api_id'])
                 : $current['hedera_api_id'],
             'hedera_gateway_host' => isset($input['hedera_gateway_host'])
                 ? sanitize_text_field((string) $input['hedera_gateway_host'])
                 : $current['hedera_gateway_host'],
-            'hedera_api_slug' => isset($input['hedera_api_slug'])
-                ? sanitize_title((string) $input['hedera_api_slug'])
-                : $current['hedera_api_slug'],
+            'hedera_api_slug' => self::sanitize_optional_slug(
+                $input,
+                'hedera_api_slug',
+                $current['hedera_api_slug']
+            ),
             'enabled_token_ids' => array_key_exists('enabled_token_ids', $input)
                 ? self::sanitize_token_ids($input['enabled_token_ids'])
                 : $current['enabled_token_ids'],
@@ -360,6 +364,21 @@ final class Ax402_WC_Settings
         }
 
         return $url;
+    }
+
+    /**
+     * Blank slug in the settings form means “keep / auto-generate”, not clear.
+     *
+     * @param array<string, mixed> $input
+     */
+    private static function sanitize_optional_slug(array $input, string $key, string $current): string
+    {
+        if (!array_key_exists($key, $input)) {
+            return $current;
+        }
+        $submitted = sanitize_title((string) $input[$key]);
+
+        return $submitted !== '' ? $submitted : $current;
     }
 
     private static function sanitize_yes_no(mixed $value): string

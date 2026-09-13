@@ -32,6 +32,7 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
 
         $this->init_form_fields();
         $this->init_settings();
+        $this->sync_gateway_slug_from_plugin_settings();
 
         $this->title = __('Pay with Ax402', 'ax402-for-woocommerce');
         $this->description =
@@ -289,7 +290,7 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
                 'title' => __('Gateway slug', 'ax402-for-woocommerce'),
                 'type' => 'text',
                 'description' => __(
-                    'Optional. Used when creating the store API on Ax402. Leave blank to auto-generate.',
+                    'Optional. Leave blank to auto-generate when the store API is created. The field stays empty until token sync and onboarding succeed.',
                     'ax402-for-woocommerce'
                 ),
                 'default' => $plugin['api_slug'],
@@ -1045,6 +1046,7 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
                     && ($needs_evm || $needs_hedera);
                 if ($can_onboard) {
                     Ax402_WC_Store_Onboarding::ensure_api();
+                    $this->sync_gateway_slug_from_plugin_settings(true);
                 }
                 $cors = Ax402_WC_Gateway_Cors::status();
                 if ($cors['error'] !== '') {
@@ -1174,6 +1176,22 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
         }
 
         return esc_html($fix);
+    }
+
+    /**
+     * WC stores slug on the gateway option; onboarding writes ax402_wc_settings.
+     * Keep the Advanced field in sync so a blank form does not look like a missing slug.
+     */
+    private function sync_gateway_slug_from_plugin_settings(bool $persist = false): void
+    {
+        $slug = Ax402_WC_Settings::all()['api_slug'];
+        if ($slug === '') {
+            return;
+        }
+        $this->settings['api_slug'] = $slug;
+        if ($persist) {
+            $this->update_option('api_slug', $slug);
+        }
     }
 
     private function submitted_api_key_unchanged(string $submitted): bool

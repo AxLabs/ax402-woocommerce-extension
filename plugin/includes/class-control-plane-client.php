@@ -43,11 +43,66 @@ final class Ax402_WC_Control_Plane_Client
         $data = $raw === '' ? null : json_decode($raw, true);
 
         if ($status >= 400) {
-            $message = is_array($data) && isset($data['error']) ? (string) $data['error'] : 'Request failed';
-            return ['status' => $status, 'error' => $message];
+            return [
+                'status' => $status,
+                'error' => self::http_error_message($status, $raw, $data),
+            ];
         }
 
         return ['status' => $status, 'data' => $data];
+    }
+
+    /**
+     * Ax402 (and CDNs) often return 4xx/5xx without `{ "error": "…" }` — e.g. plain
+     * `no available server` on HTTP 503. Surface status + a short body so admin
+     * notices are not a generic "Request failed".
+     *
+     * @param mixed $data
+     */
+    public static function http_error_message(int $status, string $raw, mixed $data): string
+    {
+        $detail = '';
+        if (is_array($data)) {
+            $error = $data['error'] ?? null;
+            if (is_string($error) && $error !== '') {
+                $detail = $error;
+            } elseif (is_array($error)) {
+                foreach (['message', 'msg', 'detail'] as $key) {
+                    if (isset($error[$key]) && is_string($error[$key]) && $error[$key] !== '') {
+                        $detail = $error[$key];
+                        break;
+                    }
+                }
+            }
+            if ($detail === '') {
+                foreach (['message', 'detail', 'title'] as $key) {
+                    if (isset($data[$key]) && is_string($data[$key]) && $data[$key] !== '') {
+                        $detail = $data[$key];
+                        break;
+                    }
+                }
+            }
+        }
+        if ($detail === '') {
+            $plain = trim($raw);
+            if (
+                $plain !== ''
+                && strlen($plain) <= 240
+                && !str_starts_with($plain, '<')
+                && !str_starts_with($plain, '{')
+            ) {
+                $detail = $plain;
+            }
+        }
+        $detail = trim($detail);
+        if ($detail === '') {
+            $detail = 'Request failed';
+        }
+        if ($status > 0) {
+            return 'HTTP ' . $status . ': ' . $detail;
+        }
+
+        return $detail;
     }
 
     /**
@@ -521,13 +576,13 @@ final class Ax402_WC_Control_Plane_Client
         $args = [
             'method' => $method,
             'headers' => [
-                'Content-Type' => 'application/json',
                 'Accept' => 'application/json',
                 'X-API-Key' => $this->api_key,
             ],
             'timeout' => 30,
         ];
         if ($body !== null) {
+            $args['headers']['Content-Type'] = 'application/json';
             $args['body'] = function_exists('wp_json_encode')
                 ? wp_json_encode($body)
                 : json_encode($body);

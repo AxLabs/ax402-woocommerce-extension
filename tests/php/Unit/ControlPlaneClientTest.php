@@ -152,4 +152,35 @@ final class ControlPlaneClientTest extends TestCase
             $calls[0][2]['accepted_token_ids']
         );
     }
+
+    public function test_http_error_message_includes_status_and_plain_body(): void
+    {
+        $this->assertSame(
+            'HTTP 503: no available server',
+            Ax402_WC_Control_Plane_Client::http_error_message(503, "no available server\n", null)
+        );
+    }
+
+    public function test_http_error_message_reads_json_message_without_error_key(): void
+    {
+        $this->assertSame(
+            'HTTP 401: invalid api key',
+            Ax402_WC_Control_Plane_Client::http_error_message(
+                401,
+                '{"message":"invalid api key"}',
+                ['message' => 'invalid api key']
+            )
+        );
+    }
+
+    public function test_platform_config_surfaces_http_error(): void
+    {
+        $http = static function (): array {
+            return ['status' => 503, 'body' => 'no available server'];
+        };
+        $client = new Ax402_WC_Control_Plane_Client('https://api.ax402.io', 'key', $http);
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('Platform config failed: HTTP 503: no available server');
+        $client->get_platform_config();
+    }
 }
