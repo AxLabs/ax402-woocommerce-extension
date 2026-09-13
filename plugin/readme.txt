@@ -4,7 +4,7 @@ Tags: woocommerce, payments, crypto, usdc, x402
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.3.0
+Stable tag: 0.4.0
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -85,6 +85,14 @@ Universal Commerce Protocol support for buying agents (`/.well-known/ucp` and `/
 Yes. In gateway settings, leave “Show Ax402 credit on the pay page” unchecked (default).
 
 == Changelog ==
+
+= 0.4.0 =
+* UCP for agents follows protocol 2026-08-25: current spec URLs, complete idempotency, optional payment Action; x402 hop stays External-URL
+* Settings: readiness checklist, last settlements, and pay-to validation; API base URL is locked and the API key is masked
+* UCP stays on by default; disable it in settings if you do not want agent discovery
+* One mixed-token Ax402 endpoint for EVM and Hedera (`pay_to_addresses`) with cached USD FX rates
+* Pay page: wait/retry states for slow wallet RPC, and confirming as soon as the wallet signs
+* WooCommerce 11.1 tested-up-to; WordPress Plugin Check packaging fixes
 
 = 0.3.0 =
 * UCP complete no longer replays buyer PAYMENT-SIGNATURE. Agents pay resource.url with standard x402, then complete again (https://github.com/AxLabs/ucp-x402-binding)
