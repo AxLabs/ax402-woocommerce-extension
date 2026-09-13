@@ -83,6 +83,7 @@ npm run env:update     # re-download pinned sources (WC/WP) + re-apply config
 npm run env:destroy    # wipe volumes (full reset)
 npm run env:seed       # re-run seed anytime (safe / idempotent)
 npm run env:e2e        # seed + E2E readiness (+ tunnel sync if WP_BASE_URL set)
+npm run plugin-check   # WordPress Plugin Check (PCP); needs wp-env running
 ```
 
 For the full payment E2E path (ngrok, upstream, `test:e2e-pay`), see **[e2e.md](e2e.md)**.

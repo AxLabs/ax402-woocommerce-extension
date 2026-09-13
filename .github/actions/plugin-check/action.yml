@@ -1,0 +1,49 @@
+name: WordPress Plugin Check
+description: Run Plugin Check on the packaged zip (the tree WordPress.org would review).
+
+runs:
+  using: composite
+  steps:
+    - name: Unpack packaged plugin
+      shell: bash
+      run: |
+        set -euo pipefail
+        VERSION="$(node -p "require('./plugin/package.json').version")"
+        ZIP="dist/ax402-for-woocommerce-${VERSION}.zip"
+        if [[ ! -f "$ZIP" ]]; then
+          echo "Missing $ZIP — run npm run package first." >&2
+          exit 1
+        fi
+        rm -rf plugin-check-build
+        mkdir -p plugin-check-build
+        unzip -q "$ZIP" -d plugin-check-build
+        test -f plugin-check-build/ax402-for-woocommerce/ax402-for-woocommerce.php
+
+    - name: Hide e2e wp-env from Plugin Check
+      shell: bash
+      run: |
+        # The official action merges into workspace .wp-env.json. This repo's
+        # file mounts ./plugin as slug "plugin" plus WooCommerce for local E2E,
+        # which would duplicate the plugin under test. Move it aside so the
+        # action starts a clean env and installs WooCommerce from Requires Plugins.
+        if [[ -f .wp-env.json ]]; then
+          mv .wp-env.json .wp-env.e2e.json
+        fi
+
+    - name: Run Plugin Check
+      uses: wordpress/plugin-check-action@v1
+      with:
+        build-dir: ./plugin-check-build/ax402-for-woocommerce
+        slug: ax402-for-woocommerce
+        include-experimental: "false"
+        # Zip already omits these; keep the list so a stray file cannot fail file_type.
+        exclude-directories: |
+          src
+          node_modules
+          vendor
+          assets/demo-products
+        exclude-files: |
+          webpack.config.js
+          .eslintrc.js
+          package-lock.json
+          composer.lock

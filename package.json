@@ -21,6 +21,7 @@
     "test:e2e-ucp": "node tests/e2e/ucp-agent.mjs",
     "test:e2e-ucp-cli": "node tests/e2e/ucp-cli.mjs",
     "package": "bash bin/package-plugin.sh",
+    "plugin-check": "bash bin/run-plugin-check.sh",
     "version:check": "bash bin/check-version.sh",
     "version:bump": "bash bin/bump-version.sh",
     "test": "npm run test:unit && npm run test:integration && npm run test:js"

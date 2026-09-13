@@ -36,6 +36,25 @@ jobs:
       - name: PHP unit tests
         run: bash bin/run-phpunit.sh --testsuite Unit
 
+  # GitHub-hosted: wordpress/plugin-check-action needs Docker + a clean wp-env.
+  # Do not fold this into the self-hosted unit job.
+  plugin-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - name: Install root + plugin JS deps
+        run: |
+          npm ci || npm install
+          npm --prefix plugin ci || npm --prefix plugin install
+      - name: Build plugin zip
+        run: npm run package
+      - name: WordPress Plugin Check
+        uses: ./.github/actions/plugin-check
+
   live-cp:
     runs-on: self-hosted
     needs: unit

@@ -73,6 +73,7 @@ Full E2E (tunnel + pay): [docs/e2e.md](docs/e2e.md).
 
 ```bash
 npm test                 # PHP unit + integration + JS unit
+npm run plugin-check     # WordPress Plugin Check (needs wp-env)
 npm run test:live-cp     # needs AX402_API_KEY (+ PAY_TO for create/delete)
 npm run test:e2e-pay     # needs public WP_BASE_URL + buyer key (see docs/e2e.md)
 npm run test:e2e-ucp     # UCP agent flow (on by default after seed; AX402_UCP_ENABLED=no to disable)

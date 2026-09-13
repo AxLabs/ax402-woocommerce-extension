@@ -38,3 +38,4 @@ Thumbs.db
 
 # Release artifacts
 dist/
+plugin-check-build/

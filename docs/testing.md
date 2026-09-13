@@ -12,6 +12,17 @@ npm run test:js
 
 PHP unit tests run via Docker Composer if local PHP is unavailable.
 
+## WordPress Plugin Check
+
+[Plugin Check](https://wordpress.org/plugins/plugin-check/) is the same tool WordPress.org uses before a directory review. **Errors** fail CI and block the GitHub Release; **warnings** (for example known slow-query PHPCS hints) are reported and do not fail.
+
+```bash
+npm run env:start        # once
+npm run plugin-check     # wp-env mount + production excludes
+```
+
+CI (`.github/workflows/ci.yml`, GitHub-hosted) and the Release workflow package the zip first, then run [`wordpress/plugin-check-action`](https://github.com/WordPress/plugin-check-action) on that tree. Local `plugin-check` needs a running wp-env and is an approximation of that zip check.
+
 UCP protocol rules (cents, discovery shape, leak scanner, asset matching, MCP PaymentRequired on `structuredContent` / `_meta["x402/payment"]`) live in `tests/php/Unit/Ucp*.php`. Live UCP settlement is `npm run test:e2e-ucp`. Shopify CLI smoke (no wallet) is `npm run test:e2e-ucp-cli`. See [ucp.md](ucp.md) and [ucp-x402-binding](https://github.com/AxLabs/ucp-x402-binding).
 
 ## Live control plane

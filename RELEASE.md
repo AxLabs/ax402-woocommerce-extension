@@ -59,7 +59,7 @@ The zip is the installable WordPress plugin (built JS included; `node_modules` /
 
 ### 1. Prepare `main`
 
-- CI on `main` is green (unit + live-cp as applicable).
+- CI on `main` is green (unit + Plugin Check + live-cp as applicable).
 - Changelog notes drafted under `== Changelog ==` in `plugin/readme.txt` for the new version.
 
 ### 2. Bump + commit
@@ -95,9 +95,14 @@ On `push` of tags `v*.*.*` (GitHub-hosted Ubuntu, so `gh` is available) it will:
 
 1. `bash bin/check-version.sh <tag>`
 2. Install deps, `npm run package`
-3. `gh release create` (or upload/edit if the release already exists) with `dist/ax402-for-woocommerce-<version>.zip` attached
+3. WordPress [Plugin Check](https://wordpress.org/plugins/plugin-check/) on that zip (stable checks; **errors** fail the job and skip creating the GitHub Release; **warnings** are annotated but do not fail)
+4. `gh release create` (or upload/edit if the release already exists) with `dist/ax402-for-woocommerce-<version>.zip` attached
 
 Inspect: **GitHub → Releases** (or `gh release view v0.2.0`).
+
+If Plugin Check fails after the tag is pushed, **do not force-push the tag**. Fix on `main`, bump patch, and tag the new version.
+
+Local equivalent (needs `npm run env:start`): `npm run plugin-check`. CI/release check the **packaged zip**; the local command checks the wp-env mount with the same excludes.
 
 ### 5. Verify
 
@@ -117,6 +122,7 @@ When asked to “release”, “bump version”, or “cut a GitHub release”:
 7. Do not force-push tags; do not delete published releases without explicit user approval.
 8. Do not put secrets in release notes.
 9. Leave `bin/repro-*.py` and `.env` out of commits (see `.gitignore`).
+10. Plugin Check must be green on `main` (CI job `plugin-check`). After tagging, the Release workflow runs it again on the zip before `gh release create`.
 
 ## Manual / emergency release
 
@@ -126,6 +132,7 @@ If Actions is unavailable:
 bash bin/check-version.sh v0.2.0
 npm ci && npm --prefix plugin ci
 npm run package
+npm run plugin-check   # needs wp-env; skip only if Actions is down and you already ran Plugin Check
 gh release create v0.2.0 "dist/ax402-for-woocommerce-0.2.0.zip" \
   --title "v0.2.0" \
   --generate-notes \

@@ -14,7 +14,7 @@ Optional UCP for buying agents: [docs/ucp.md](docs/ucp.md). x402 on that surface
 
 - SemVer in multiple files must stay in sync (`bash bin/check-version.sh`).
 - Bump with `bash bin/bump-version.sh X.Y.Z`.
-- Publish by pushing annotated tag `vX.Y.Z` → `.github/workflows/release.yml` builds the zip and creates the GitHub Release.
+- Publish by pushing annotated tag `vX.Y.Z` → `.github/workflows/release.yml` runs Plugin Check on the zip, then creates the GitHub Release.
 
 ## Local E2E
 
