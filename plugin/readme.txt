@@ -4,7 +4,7 @@ Tags: woocommerce, payments, crypto, usdc, x402
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.4.0
+Stable tag: 0.4.1
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -85,6 +85,11 @@ Universal Commerce Protocol support for buying agents (`/.well-known/ucp` and `/
 Yes. In gateway settings, leave “Show Ax402 credit on the pay page” unchecked (default).
 
 == Changelog ==
+
+= 0.4.1 =
+* Token sync errors show the HTTP status and a short response body instead of a generic "Request failed"
+* Leaving Gateway slug blank no longer clears an auto-generated slug
+* WordPress Plugin Check runs on CI and before GitHub Releases
 
 = 0.4.0 =
 * UCP for agents follows protocol 2026-08-25: current spec URLs, complete idempotency, optional payment Action; x402 hop stays External-URL
