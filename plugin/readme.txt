@@ -4,7 +4,7 @@ Tags: woocommerce, payments, crypto, usdc, x402
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.4.1
+Stable tag: 0.4.2
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -20,24 +20,49 @@ You need an Ax402 merchant account and API key from https://ax402.io
 
 = External services =
 
-This plugin talks to Ax402 (operated by AxLabs GmbH) to create payment endpoints, sync platform tokens, and confirm settlements.
+This plugin does not include analytics, advertising pixels, or other tracking. It contacts the services below only to accept Ax402 / x402 payments. Saving an Ax402 API key in WooCommerce settings is consent to use the Ax402 service. WalletConnect, Hedera Mirror Node, and public RPC calls run in the shopper’s browser when they choose to pay.
 
-* When: configuring the gateway, placing an Ax402 order, loading the pay page, refreshing tokens, and verifying payment.
+= Ax402 =
+
+Ax402 (operated by AxLabs) creates payment endpoints, syncs settlement tokens, confirms settlements, and serves the payment gateway the shopper or agent pays. The browser and the WordPress server may call your assigned gateway host (`*.ax402.io`) under the same operator.
+
+* When: configuring the gateway, placing an Ax402 order, loading the pay page, refreshing tokens, verifying payment, and (server-side) proxying or reconciling a payment when needed.
 * Data sent: API key, pay-to wallet, order totals / amounts, order keys, selected settlement token, store origin for CORS, and settlement references returned by Ax402. No card data or wallet private keys are sent.
 * Service: https://ax402.io
 * Terms: https://ax402.io/terms
 * Privacy: https://ax402.io/privacy
 * Disclaimer: https://ax402.io/disclaimer
 
-Chain metadata (names, explorers, public RPC hints) may be loaded from https://chainid.network/chains.json when a token does not already carry that data.
+= Chain metadata (chainid.network) =
 
-On the pay page (only when a shopper chooses to pay), the browser may also contact:
+When a settlement token does not already include a chain name, public RPC, or explorer URL, the plugin may fetch the public Ethereum chain list at https://chainid.network/chains.json (cached for 24 hours). This is a GET of public JSON with an Accept header only. No personal data, API keys, or order data are sent. There is no separate commercial terms or privacy policy because the dataset has no user accounts; it is published as https://github.com/ethereum-lists/chains (MIT).
 
-* **WalletConnect / Reown** — when Hedera settlement is selected and a WalletConnect project ID is configured. Used to discover and connect Hedera wallets (for example HashPack). Data: project ID, session metadata, and wallet account id for signing. Docs: https://docs.reown.com/
-* **Hedera Mirror Node** — public REST endpoints (`mainnet-public.mirrornode.hedera.com` / `testnet.mirrornode.hedera.com`) to read balances and network readiness for Hedera tokens. No private keys are sent.
-* **Public EVM RPC endpoints** — URLs from token metadata or chainid.network, used in the shopper’s browser for balance / network checks and payment signing with their wallet. No server-side private keys are sent.
+= WalletConnect / Reown =
+
+On the pay page, when a shopper selects Hedera settlement and the merchant has configured a WalletConnect project ID, the browser uses WalletConnect / Reown to discover and connect a Hedera wallet (for example HashPack). This includes WalletConnect relay traffic such as https://rpc.walletconnect.com/.
+
+* When: only after the shopper starts Hedera wallet connect on the pay page.
+* Data sent: project ID, dapp metadata (store name and URL), session data, and the wallet account id used for signing. Private keys stay in the wallet.
+* Terms: https://reown.com/terms-of-service and https://walletconnect.com/terms
+* Privacy: https://reown.com/privacy-policy and https://walletconnect.com/privacy
+* Docs: https://docs.reown.com/
+
+= Hedera Mirror Node =
+
+On the pay page, the shopper's browser may query public Hedera Mirror Node REST endpoints (`mainnet-public.mirrornode.hedera.com` / `testnet.mirrornode.hedera.com`) to read token balances and network readiness.
+
+* When: when a shopper pays with a Hedera settlement token.
+* Data sent: Hedera account id and token id in public REST paths. No private keys are sent.
+* Terms: https://hedera.com/terms
+* Privacy: https://hedera.com/privacy
+
+= Public EVM RPC endpoints =
+
+The shopper’s browser may call public EVM JSON-RPC URLs taken from token metadata or chainid.network for balance checks, chain switching, and payment signing with their wallet. No server-side private keys are sent. Exact RPC URLs vary by chain.
 
 Wallet extensions (for example MetaMask) run locally in the shopper’s browser; private keys never leave the wallet.
+
+UCP discovery JSON may include protocol spec and schema URLs (https://ucp.dev, https://x402.org/schemas/ucp-payment-handler.json, and https://github.com/AxLabs/ucp-x402-binding). Those are documentation identifiers. This plugin does not call them as APIs.
 
 = Source code and build =
 
@@ -74,7 +99,7 @@ Order totals are priced in USD and mapped to Ax402 settlement tokens. Non-USD st
 
 = Are the REST routes public? =
 
-Yes, by design. Agent browse/buy routes are public storefront APIs. The fulfill callback is public so Ax402 can confirm payment; it is gated by WooCommerce order key plus a one-time fulfill token. Settlement selection requires a valid order key.
+Yes, by design. Agent browse/buy routes (`/wp-json/ax402/v1`) and UCP shopping routes (`/wp-json/ucp/v1`) are public storefront APIs for humans and buying agents. Each route sets permission_callback to __return_true. The fulfill callback is public so Ax402 can confirm payment; it is gated by WooCommerce order key plus a one-time fulfill token. UCP session, cart, and order URLs use the WooCommerce order key as the capability. Settlement selection requires a valid order key. Disable UCP in Ax402 settings if you do not want agent discovery.
 
 = What is UCP? =
 
@@ -85,6 +110,10 @@ Universal Commerce Protocol support for buying agents (`/.well-known/ucp` and `/
 Yes. In gateway settings, leave “Show Ax402 credit on the pay page” unchecked (default).
 
 == Changelog ==
+
+= 0.4.2 =
+* WordPress.org review: enqueue pay-page shell and admin settings JS/CSS; document third-party services; keep public REST routes explicit
+* No payment-flow changes
 
 = 0.4.1 =
 * Token sync errors show the HTTP status and a short response body instead of a generic "Request failed"

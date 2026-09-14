@@ -102,14 +102,14 @@ final class Ax402_WC_Ucp_Profile_Builder
                         [
                             'version' => self::UCP_VERSION,
                             'transport' => 'rest',
-                            'endpoint' => $endpoint !== '' ? $endpoint : 'https://example.test/wp-json/ucp/v1',
+                            'endpoint' => $endpoint,
                             'spec' => self::SHOPPING_SPEC,
                             'schema' => self::SHOPPING_REST_SCHEMA,
                         ],
                         [
                             'version' => self::UCP_VERSION,
                             'transport' => 'mcp',
-                            'endpoint' => $mcp_endpoint !== '' ? $mcp_endpoint : 'https://example.test/wp-json/ucp/v1/mcp',
+                            'endpoint' => $mcp_endpoint,
                             'spec' => self::SHOPPING_SPEC,
                             'schema' => self::SHOPPING_MCP_SCHEMA,
                         ],

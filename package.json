@@ -1,6 +1,6 @@
 {
   "name": "ax402-woocommerce-extension",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "private": true,
   "description": "Monorepo for the Ax402 WooCommerce extension",
   "scripts": {

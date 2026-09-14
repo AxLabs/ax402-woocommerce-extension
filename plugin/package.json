@@ -1,12 +1,12 @@
 {
   "name": "ax402-for-woocommerce",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "private": true,
   "description": "Ax402 WooCommerce payment gateway frontend assets",
   "scripts": {
     "build": "wp-scripts build",
     "start": "wp-scripts start",
-    "lint:js": "wp-scripts lint-js src",
+    "lint:js": "wp-scripts lint-js src assets/admin-settings.js assets/pay-page-shell.js",
     "test:js": "vitest run --config ../vitest.config.mjs"
   },
   "dependencies": {

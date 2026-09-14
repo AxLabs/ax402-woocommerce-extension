@@ -824,13 +824,13 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
                     </fieldset>
                 <?php endif; ?>
                 <p style="margin:0.9em 0 0.35em">
-                    <input type="hidden" name="<?php echo esc_attr($refresh_key); ?>" id="<?php echo esc_attr($refresh_key); ?>" value="0" />
+                    <input type="hidden" name="<?php echo esc_attr($refresh_key); ?>" id="<?php echo esc_attr($refresh_key); ?>" value="0" data-ax402-refresh-flag />
                     <button
                         type="submit"
                         class="button button-secondary"
                         name="save"
                         value="<?php echo esc_attr__('Refresh tokens from Ax402', 'ax402-for-woocommerce'); ?>"
-                        onclick="var el=document.getElementById('<?php echo esc_js($refresh_key); ?>'); if (el) { el.value='1'; }"
+                        data-ax402-refresh-tokens
                     >
                         <?php echo esc_html__('Refresh tokens from Ax402', 'ax402-for-woocommerce'); ?>
                     </button>
@@ -841,33 +841,6 @@ final class Ax402_WC_Gateway_Ax402 extends WC_Payment_Gateway
                         'ax402-for-woocommerce'
                     ); ?>
                 </p>
-                <script>
-                (function () {
-                    function syncHederaFields() {
-                        var hederaOn = false;
-                        document.querySelectorAll('input.ax402-settlement-token[data-hedera="1"]:checked:not(:disabled)').forEach(function () {
-                            hederaOn = true;
-                        });
-                        document.querySelectorAll('[data-ax402-hedera-payto="1"]').forEach(function (el) {
-                            el.readOnly = !hederaOn;
-                            if (!hederaOn) {
-                                el.setAttribute('aria-disabled', 'true');
-                            } else {
-                                el.removeAttribute('aria-disabled');
-                            }
-                            if (el.closest('tr')) {
-                                el.closest('tr').style.opacity = hederaOn ? '' : '0.55';
-                            }
-                        });
-                    }
-                    document.addEventListener('change', function (e) {
-                        if (e.target && e.target.classList && e.target.classList.contains('ax402-settlement-token')) {
-                            syncHederaFields();
-                        }
-                    });
-                    syncHederaFields();
-                })();
-                </script>
                 <?php if (!empty($data['description'])) : ?>
                     <p class="description"><?php echo esc_html((string) $data['description']); ?></p>
                 <?php endif; ?>

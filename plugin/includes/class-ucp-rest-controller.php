@@ -15,95 +15,77 @@ final class Ax402_WC_Ucp_Rest_Controller
 
     public function register(): void
     {
-        $item = [
-            'permission_callback' => '__return_true',
-        ];
-
         register_rest_route(self::NS, '/mcp', [
-            array_merge($item, [
-                'methods' => WP_REST_Server::CREATABLE,
-                'callback' => [$this, 'mcp'],
-            ]),
+            'methods' => WP_REST_Server::CREATABLE,
+            'callback' => [$this, 'mcp'],
+            'permission_callback' => '__return_true',
         ]);
         register_rest_route(self::NS, '/catalog/search', [
-            array_merge($item, [
-                'methods' => WP_REST_Server::CREATABLE,
-                'callback' => [$this, 'catalog_search'],
-            ]),
+            'methods' => WP_REST_Server::CREATABLE,
+            'callback' => [$this, 'catalog_search'],
+            'permission_callback' => '__return_true',
         ]);
         register_rest_route(self::NS, '/catalog/lookup', [
-            array_merge($item, [
-                'methods' => WP_REST_Server::CREATABLE,
-                'callback' => [$this, 'catalog_lookup'],
-            ]),
+            'methods' => WP_REST_Server::CREATABLE,
+            'callback' => [$this, 'catalog_lookup'],
+            'permission_callback' => '__return_true',
         ]);
         register_rest_route(self::NS, '/catalog/product', [
-            array_merge($item, [
-                'methods' => WP_REST_Server::CREATABLE,
-                'callback' => [$this, 'catalog_product'],
-            ]),
+            'methods' => WP_REST_Server::CREATABLE,
+            'callback' => [$this, 'catalog_product'],
+            'permission_callback' => '__return_true',
         ]);
 
         register_rest_route(self::NS, '/checkout-sessions', [
-            array_merge($item, [
-                'methods' => WP_REST_Server::CREATABLE,
-                'callback' => [$this, 'create_session'],
-            ]),
+            'methods' => WP_REST_Server::CREATABLE,
+            'callback' => [$this, 'create_session'],
+            'permission_callback' => '__return_true',
         ]);
         register_rest_route(self::NS, '/checkout-sessions/(?P<id>[A-Za-z0-9_-]+)', [
-            array_merge($item, [
-                'methods' => WP_REST_Server::READABLE,
-                'callback' => [$this, 'get_session'],
-            ]),
+            'methods' => WP_REST_Server::READABLE,
+            'callback' => [$this, 'get_session'],
+            'permission_callback' => '__return_true',
         ]);
         register_rest_route(self::NS, '/checkout-sessions/(?P<id>[A-Za-z0-9_-]+)', [
-            array_merge($item, [
-                'methods' => 'PUT',
-                'callback' => [$this, 'update_session'],
-            ]),
+            'methods' => 'PUT',
+            'callback' => [$this, 'update_session'],
+            'permission_callback' => '__return_true',
         ]);
         register_rest_route(self::NS, '/checkout-sessions/(?P<id>[A-Za-z0-9_-]+)/complete', [
-            array_merge($item, [
-                'methods' => WP_REST_Server::CREATABLE,
-                'callback' => [$this, 'complete_session'],
-            ]),
+            'methods' => WP_REST_Server::CREATABLE,
+            'callback' => [$this, 'complete_session'],
+            'permission_callback' => '__return_true',
         ]);
         register_rest_route(self::NS, '/checkout-sessions/(?P<id>[A-Za-z0-9_-]+)/cancel', [
-            array_merge($item, [
-                'methods' => WP_REST_Server::CREATABLE,
-                'callback' => [$this, 'cancel_session'],
-            ]),
+            'methods' => WP_REST_Server::CREATABLE,
+            'callback' => [$this, 'cancel_session'],
+            'permission_callback' => '__return_true',
         ]);
 
         register_rest_route(self::NS, '/carts', [
-            array_merge($item, [
-                'methods' => WP_REST_Server::CREATABLE,
-                'callback' => [$this, 'create_cart'],
-            ]),
+            'methods' => WP_REST_Server::CREATABLE,
+            'callback' => [$this, 'create_cart'],
+            'permission_callback' => '__return_true',
         ]);
         register_rest_route(self::NS, '/carts/(?P<id>[A-Za-z0-9_-]+)', [
-            array_merge($item, [
-                'methods' => WP_REST_Server::READABLE,
-                'callback' => [$this, 'get_cart'],
-            ]),
+            'methods' => WP_REST_Server::READABLE,
+            'callback' => [$this, 'get_cart'],
+            'permission_callback' => '__return_true',
         ]);
         register_rest_route(self::NS, '/carts/(?P<id>[A-Za-z0-9_-]+)', [
-            array_merge($item, [
-                'methods' => 'PUT',
-                'callback' => [$this, 'update_cart'],
-            ]),
+            'methods' => 'PUT',
+            'callback' => [$this, 'update_cart'],
+            'permission_callback' => '__return_true',
         ]);
         register_rest_route(self::NS, '/carts/(?P<id>[A-Za-z0-9_-]+)/cancel', [
-            array_merge($item, [
-                'methods' => WP_REST_Server::CREATABLE,
-                'callback' => [$this, 'cancel_cart'],
-            ]),
+            'methods' => WP_REST_Server::CREATABLE,
+            'callback' => [$this, 'cancel_cart'],
+            'permission_callback' => '__return_true',
         ]);
         register_rest_route(self::NS, '/orders/(?P<id>[A-Za-z0-9_-]+)', [
-            array_merge($item, [
-                'methods' => WP_REST_Server::READABLE,
-                'callback' => [$this, 'get_order'],
-            ]),
+            'methods' => WP_REST_Server::READABLE,
+            'callback' => [$this, 'get_order'],
+            'permission_callback' => '__return_true',
         ]);
     }
 
