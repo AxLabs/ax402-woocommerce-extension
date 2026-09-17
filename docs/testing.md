@@ -21,7 +21,7 @@ npm run env:start        # once
 npm run plugin-check     # wp-env mount + production excludes
 ```
 
-CI (`.github/workflows/ci.yml`, GitHub-hosted) and the Release workflow package the zip first, then run [`wordpress/plugin-check-action`](https://github.com/WordPress/plugin-check-action) on that tree. Local `plugin-check` needs a running wp-env and is an approximation of that zip check.
+CI (`.github/workflows/ci.yml`): **unit** and **live-cp** run on the self-hosted runner (existing PHP 8.1+ / Composer, or Docker via `bin/run-phpunit.sh`). **Plugin Check** stays on GitHub-hosted Ubuntu because [`wordpress/plugin-check-action`](https://github.com/WordPress/plugin-check-action) starts wp-env there. Local `plugin-check` needs a running wp-env and is an approximation of that zip check.
 
 UCP protocol rules (cents, discovery shape, leak scanner, asset matching, MCP PaymentRequired on `structuredContent` / `_meta["x402/payment"]`) live in `tests/php/Unit/Ucp*.php`. Live UCP settlement is `npm run test:e2e-ucp`. Shopify CLI smoke (no wallet) is `npm run test:e2e-ucp-cli`. See [ucp.md](ucp.md) and [ucp-x402-binding](https://github.com/AxLabs/ucp-x402-binding).
 

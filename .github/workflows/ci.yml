@@ -10,20 +10,42 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Self-hosted: no setup-php (it hangs on this Mac until the 6h GitHub timeout).
+  # PHP comes from the runner or Docker via bin/run-phpunit.sh.
   unit:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+    runs-on: self-hosted
+    timeout-minutes: 20
     steps:
+      # Docker PHPUnit can leave root-owned .phpunit.cache; reclaim before checkout clean.
+      - name: Reclaim workspace ownership
+        run: |
+          ws="${GITHUB_WORKSPACE:-.}"
+          if [ -e "$ws" ]; then
+            sudo chown -R "$(id -u):$(id -g)" "$ws" || true
+          fi
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: npm
-      - uses: shivammathur/setup-php@v2
-        with:
-          php-version: "8.2"
-          tools: composer
-          coverage: none
+      - name: Require PHP 8.1+ or Docker
+        run: |
+          set -euo pipefail
+          if command -v php >/dev/null 2>&1 && php -r 'exit(PHP_VERSION_ID >= 80100 ? 0 : 1);'; then
+            php -v
+            if command -v composer >/dev/null 2>&1; then
+              composer -V
+            else
+              echo "PHP is present but composer is not; bin/run-phpunit.sh will try Docker."
+            fi
+            exit 0
+          fi
+          if command -v docker >/dev/null 2>&1 && docker info >/dev/null 2>&1; then
+            echo "No local PHP 8.1+; bin/run-phpunit.sh will use Docker composer:2."
+            exit 0
+          fi
+          echo "Self-hosted runner needs PHP >= 8.1 and Composer, or a working Docker daemon." >&2
+          exit 1
       - name: Install root + plugin JS deps
         run: |
           npm ci || npm install
@@ -33,7 +55,7 @@ jobs:
       - name: PHP unit tests
         run: bash bin/run-phpunit.sh --testsuite Unit
 
-  # GitHub-hosted: wordpress/plugin-check-action needs Docker + a clean wp-env.
+  # Must stay GitHub-hosted: wordpress/plugin-check-action starts wp-env/Docker on Ubuntu.
   plugin-check:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -53,16 +75,17 @@ jobs:
         uses: ./.github/actions/plugin-check
 
   live-cp:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
+    runs-on: self-hosted
+    timeout-minutes: 15
     needs: unit
     steps:
+      - name: Reclaim workspace ownership
+        run: |
+          ws="${GITHUB_WORKSPACE:-.}"
+          if [ -e "$ws" ]; then
+            sudo chown -R "$(id -u):$(id -g)" "$ws" || true
+          fi
       - uses: actions/checkout@v4
-      - uses: shivammathur/setup-php@v2
-        with:
-          php-version: "8.2"
-          tools: composer
-          coverage: none
       - name: Live control-plane smoke
         env:
           AX402_API_KEY: ${{ secrets.AX402_API_KEY }}
