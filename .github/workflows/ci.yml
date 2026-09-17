@@ -5,23 +5,20 @@ on:
     branches: [main, master]
   pull_request:
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   unit:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      # Docker PHPUnit can leave root-owned .phpunit.cache; reclaim before checkout clean.
-      - name: Reclaim workspace ownership
-        run: |
-          ws="${GITHUB_WORKSPACE:-.}"
-          if [ -e "$ws" ]; then
-            sudo chown -R "$(id -u):$(id -g)" "$ws" || true
-          fi
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: npm
-      # Prefer native PHPUnit over Docker so CI does not depend on Docker Desktop.
       - uses: shivammathur/setup-php@v2
         with:
           php-version: "8.2"
@@ -37,9 +34,9 @@ jobs:
         run: bash bin/run-phpunit.sh --testsuite Unit
 
   # GitHub-hosted: wordpress/plugin-check-action needs Docker + a clean wp-env.
-  # Do not fold this into the self-hosted unit job.
   plugin-check:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -56,15 +53,10 @@ jobs:
         uses: ./.github/actions/plugin-check
 
   live-cp:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     needs: unit
     steps:
-      - name: Reclaim workspace ownership
-        run: |
-          ws="${GITHUB_WORKSPACE:-.}"
-          if [ -e "$ws" ]; then
-            sudo chown -R "$(id -u):$(id -g)" "$ws" || true
-          fi
       - uses: actions/checkout@v4
       - uses: shivammathur/setup-php@v2
         with:
