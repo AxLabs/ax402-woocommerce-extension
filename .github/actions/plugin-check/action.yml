@@ -36,6 +36,8 @@ runs:
         build-dir: ./plugin-check-build/ax402-for-woocommerce
         slug: ax402-for-woocommerce
         include-experimental: "false"
+        # "latest" resolved to 7.1.1 which is not a WordPress.git ref yet (wp-env fetch fails).
+        wp-version: "7.1"
         # Zip already omits these; keep the list so a stray file cannot fail file_type.
         exclude-directories: |
           src
