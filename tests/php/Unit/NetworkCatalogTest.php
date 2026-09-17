@@ -41,17 +41,32 @@ final class NetworkCatalogTest extends TestCase
         $this->assertSame('https://explorer.example.test', $meta['explorer_url']);
     }
 
-    public function test_index_chainlist(): void
+    public function test_metadata_from_chain_row_skips_templated_rpc(): void
     {
-        $indexed = Ax402_WC_Chain_Metadata::index_chainlist([
-            [
-                'chainId' => 8453,
-                'name' => 'Base',
-                'rpc' => ['https://mainnet.base.org'],
-                'explorers' => [['url' => 'https://basescan.org']],
+        $meta = Ax402_WC_Chain_Metadata::metadata_from_chain_row([
+            'chainId' => 8453,
+            'name' => 'Base',
+            'rpc' => [
+                'https://mainnet.infura.io/v3/${INFURA_API_KEY}',
+                'https://mainnet.base.org',
             ],
-        ]);
-        $this->assertSame('Base', $indexed[8453]['name']);
+            'explorers' => [['url' => 'https://basescan.org/']],
+        ], 8453);
+        $this->assertSame('Base', $meta['label']);
+        $this->assertSame('https://mainnet.base.org', $meta['rpc_url']);
+        $this->assertSame('https://basescan.org', $meta['explorer_url']);
+    }
+
+    public function test_chain_file_url_uses_github_contents_api(): void
+    {
+        $url = Ax402_WC_Chain_Metadata::chain_file_url(8453);
+        $this->assertSame(
+            'https://api.github.com/repos/ethereum-lists/chains/contents/_data/chains/eip155-8453.json',
+            $url
+        );
+        $this->assertStringNotContainsString('chainid.network', $url);
+        $this->assertStringNotContainsString('jsdelivr', $url);
+        $this->assertStringNotContainsString('githubusercontent', $url);
     }
 
     public function test_catalog_merges_supported_networks(): void

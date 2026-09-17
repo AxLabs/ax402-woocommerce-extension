@@ -4,7 +4,7 @@ Tags: woocommerce, payments, crypto, usdc, x402
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 8.1
-Stable tag: 0.4.2
+Stable tag: 0.4.3
 License: GPLv3 or later
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 
@@ -33,9 +33,15 @@ Ax402 (operated by AxLabs) creates payment endpoints, syncs settlement tokens, c
 * Privacy: https://ax402.io/privacy
 * Disclaimer: https://ax402.io/disclaimer
 
-= Chain metadata (chainid.network) =
+= Chain metadata (GitHub / ethereum-lists) =
 
-When a settlement token does not already include a chain name, public RPC, or explorer URL, the plugin may fetch the public Ethereum chain list at https://chainid.network/chains.json (cached for 24 hours). This is a GET of public JSON with an Accept header only. No personal data, API keys, or order data are sent. There is no separate commercial terms or privacy policy because the dataset has no user accounts; it is published as https://github.com/ethereum-lists/chains (MIT).
+When a settlement token does not already include a chain name, public RPC, or explorer URL, the plugin may fetch one public Ethereum chain JSON file from the GitHub Contents API at https://api.github.com/repos/ethereum-lists/chains/contents/_data/chains/eip155-{id}.json, cached for 24 hours per chain. The dataset is https://github.com/ethereum-lists/chains (MIT).
+
+* When: resolving a display name, public RPC, or explorer for an EVM settlement network that lacks those fields on the Ax402 token.
+* Data sent: HTTP GET with Accept and GitHub API version headers only. The path includes the numeric chain id. No personal data, API keys, or order data are sent.
+* Service: https://api.github.com
+* Terms: https://docs.github.com/en/site-policy/github-terms/github-terms-of-service
+* Privacy: https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement
 
 = WalletConnect / Reown =
 
@@ -58,7 +64,7 @@ On the pay page, the shopper's browser may query public Hedera Mirror Node REST 
 
 = Public EVM RPC endpoints =
 
-The shopper’s browser may call public EVM JSON-RPC URLs taken from token metadata or chainid.network for balance checks, chain switching, and payment signing with their wallet. No server-side private keys are sent. Exact RPC URLs vary by chain.
+The shopper’s browser may call public EVM JSON-RPC URLs taken from token metadata or ethereum-lists chain files (via the GitHub Contents API) for balance checks, chain switching, and payment signing with their wallet. No server-side private keys are sent. Exact RPC URLs vary by chain.
 
 Wallet extensions (for example MetaMask) run locally in the shopper’s browser; private keys never leave the wallet.
 
@@ -110,6 +116,10 @@ Universal Commerce Protocol support for buying agents (`/.well-known/ucp` and `/
 Yes. In gateway settings, leave “Show Ax402 credit on the pay page” unchecked (default).
 
 == Changelog ==
+
+= 0.4.3 =
+* WordPress.org review: load EVM chain metadata from the GitHub Contents API (ethereum-lists) with Terms and Privacy links
+* No payment-flow changes
 
 = 0.4.2 =
 * WordPress.org review: enqueue pay-page shell and admin settings JS/CSS; document third-party services; keep public REST routes explicit

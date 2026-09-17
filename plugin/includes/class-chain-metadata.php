@@ -7,17 +7,17 @@ defined('ABSPATH') || exit;
 /**
  * Resolve EVM chain display name / public RPC / explorer from dynamic metadata.
  *
- * Prefers fields on Ax402 payment token `extra`, then ethereum-lists via chainid.network.
- * No Ax402-specific chain ids are hard-coded here.
+ * Prefers fields on Ax402 payment token `extra`, then one ethereum-lists chain
+ * file via the GitHub Contents API. No Ax402-specific chain ids are hard-coded here.
  */
 final class Ax402_WC_Chain_Metadata
 {
-    private const CHAINLIST_URL = 'https://chainid.network/chains.json';
-    private const CACHE_KEY = 'ax402_wc_chainlist_v1';
+    private const CHAIN_FILE_URL = 'https://api.github.com/repos/ethereum-lists/chains/contents/_data/chains/eip155-%d.json';
+    private const CACHE_KEY_PREFIX = 'ax402_wc_chain_eip155_';
     private const CACHE_TTL = 86400;
 
-    /** @var array<int, array<string, mixed>>|null */
-    private static ?array $chainlist = null;
+    /** @var array<int, array<string, mixed>|null> */
+    private static array $rows = [];
 
     /**
      * @param array<string, mixed> $token Platform payment token row
@@ -53,6 +53,14 @@ final class Ax402_WC_Chain_Metadata
             'explorerUrl',
             'explorer',
         ]);
+
+        if ($label !== '' && $rpc !== '' && $explorer !== '') {
+            return [
+                'label' => $label,
+                'rpc_url' => $rpc,
+                'explorer_url' => $explorer,
+            ];
+        }
 
         $from_list = self::from_caip2($network);
         if ($label === '') {
@@ -100,7 +108,7 @@ final class Ax402_WC_Chain_Metadata
             return ['label' => '', 'rpc_url' => '', 'explorer_url' => ''];
         }
 
-        $row = self::chainlist()[$chain_id] ?? null;
+        $row = self::chain_row($chain_id);
         if (!is_array($row)) {
             return [
                 'label' => 'Chain ' . $chain_id,
@@ -109,6 +117,33 @@ final class Ax402_WC_Chain_Metadata
             ];
         }
 
+        return self::metadata_from_chain_row($row, $chain_id);
+    }
+
+    public static function eip155_chain_id(string $network): ?int
+    {
+        if (!str_starts_with($network, 'eip155:')) {
+            return null;
+        }
+        $id = substr($network, strlen('eip155:'));
+        if (!ctype_digit($id)) {
+            return null;
+        }
+
+        return (int) $id;
+    }
+
+    public static function chain_file_url(int $chain_id): string
+    {
+        return sprintf(self::CHAIN_FILE_URL, $chain_id);
+    }
+
+    /**
+     * @param array<string, mixed> $row ethereum-lists chain object
+     * @return array{label:string,rpc_url:string,explorer_url:string}
+     */
+    public static function metadata_from_chain_row(array $row, int $chain_id): array
+    {
         $rpc = '';
         $rpcs = $row['rpc'] ?? [];
         if (is_array($rpcs)) {
@@ -143,19 +178,6 @@ final class Ax402_WC_Chain_Metadata
         ];
     }
 
-    public static function eip155_chain_id(string $network): ?int
-    {
-        if (!str_starts_with($network, 'eip155:')) {
-            return null;
-        }
-        $id = substr($network, strlen('eip155:'));
-        if (!ctype_digit($id)) {
-            return null;
-        }
-
-        return (int) $id;
-    }
-
     /**
      * @param list<string> $keys
      * @param array<string, mixed> $extra
@@ -172,69 +194,50 @@ final class Ax402_WC_Chain_Metadata
     }
 
     /**
-     * @return array<int, array<string, mixed>>
+     * @return array<string, mixed>|null
      */
-    private static function chainlist(): array
+    private static function chain_row(int $chain_id): ?array
     {
-        if (self::$chainlist !== null) {
-            return self::$chainlist;
+        if (array_key_exists($chain_id, self::$rows)) {
+            return self::$rows[$chain_id];
         }
 
+        $cache_key = self::CACHE_KEY_PREFIX . $chain_id;
         if (function_exists('get_transient')) {
-            $cached = get_transient(self::CACHE_KEY);
+            $cached = get_transient($cache_key);
             if (is_array($cached)) {
-                self::$chainlist = self::index_chainlist($cached);
-                return self::$chainlist;
+                self::$rows[$chain_id] = $cached;
+                return $cached;
             }
         }
 
-        $raw = self::fetch_chainlist_json();
-        $decoded = is_string($raw) && $raw !== ''
-            ? json_decode($raw, true)
-            : null;
+        $raw = self::fetch_chain_json($chain_id);
+        $decoded = self::decode_chain_json($raw);
         if (!is_array($decoded)) {
-            self::$chainlist = [];
-            return self::$chainlist;
+            self::$rows[$chain_id] = null;
+            return null;
         }
 
         if (function_exists('set_transient')) {
-            set_transient(self::CACHE_KEY, $decoded, self::CACHE_TTL);
+            set_transient($cache_key, $decoded, self::CACHE_TTL);
         }
 
-        self::$chainlist = self::index_chainlist($decoded);
-        return self::$chainlist;
+        self::$rows[$chain_id] = $decoded;
+        return $decoded;
     }
 
-    /**
-     * @param list<mixed>|array<string, mixed> $rows
-     * @return array<int, array<string, mixed>>
-     */
-    public static function index_chainlist(array $rows): array
-    {
-        $out = [];
-        foreach ($rows as $row) {
-            if (!is_array($row)) {
-                continue;
-            }
-            $id = $row['chainId'] ?? null;
-            if (!is_int($id) && !(is_string($id) && ctype_digit($id))) {
-                continue;
-            }
-            $out[(int) $id] = $row;
-        }
-
-        return $out;
-    }
-
-    private static function fetch_chainlist_json(): string
+    private static function fetch_chain_json(int $chain_id): string
     {
         if (!function_exists('wp_remote_get')) {
             return '';
         }
 
-        $response = wp_remote_get(self::CHAINLIST_URL, [
+        $response = wp_remote_get(self::chain_file_url($chain_id), [
             'timeout' => 15,
-            'headers' => ['Accept' => 'application/json'],
+            'headers' => [
+                'Accept' => 'application/vnd.github.raw+json',
+                'X-GitHub-Api-Version' => '2022-11-28',
+            ],
         ]);
         if (is_wp_error($response)) {
             return '';
@@ -247,9 +250,41 @@ final class Ax402_WC_Chain_Metadata
         return (string) wp_remote_retrieve_body($response);
     }
 
+    /**
+     * @return array<string, mixed>|null
+     */
+    private static function decode_chain_json(string $raw): ?array
+    {
+        if ($raw === '') {
+            return null;
+        }
+
+        $decoded = json_decode($raw, true);
+        if (!is_array($decoded)) {
+            return null;
+        }
+
+        // GitHub Contents API wrapper when the raw media type is not honored.
+        if (isset($decoded['encoding'], $decoded['content'])
+            && $decoded['encoding'] === 'base64'
+            && is_string($decoded['content'])
+        ) {
+            $inner = base64_decode(str_replace("\n", '', $decoded['content']), true);
+            if (!is_string($inner) || $inner === '') {
+                return null;
+            }
+            $decoded = json_decode($inner, true);
+            if (!is_array($decoded)) {
+                return null;
+            }
+        }
+
+        return $decoded;
+    }
+
     /** @internal tests */
     public static function reset_cache_for_tests(): void
     {
-        self::$chainlist = null;
+        self::$rows = [];
     }
 }
