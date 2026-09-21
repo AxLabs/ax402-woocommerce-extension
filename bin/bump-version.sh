@@ -56,6 +56,26 @@ readme, n3 = re.subn(
 )
 if n3 != 1:
     raise SystemExit(f"Failed to update readme.txt Stable tag (n={n3})")
+
+# Pointer only — full notes live on the GitHub Release (see RELEASE.md).
+changelog_heading = f"= {version} ="
+release_url = (
+    "https://github.com/AxLabs/ax402-woocommerce-extension/releases/tag/v"
+    + version
+)
+stub = f"{changelog_heading}\n[GitHub release v{version}]({release_url})\n\n"
+marker = "== Changelog ==\n"
+if changelog_heading not in readme:
+    if marker not in readme:
+        raise SystemExit("readme.txt missing == Changelog ==")
+    # Insert after the Changelog heading and any intro paragraph, before the
+    # first existing = X.Y.Z = entry.
+    first_entry = re.search(r"\n= [0-9].* =\n", readme)
+    if first_entry and first_entry.start() > readme.find(marker):
+        insert_at = first_entry.start() + 1
+        readme = readme[:insert_at] + stub + readme[insert_at:]
+    else:
+        readme = readme.replace(marker, marker + "\n" + stub, 1)
 readme_txt.write_text(readme)
 PY
 

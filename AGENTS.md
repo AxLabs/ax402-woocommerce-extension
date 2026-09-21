@@ -10,11 +10,14 @@ Optional UCP for buying agents: [docs/ucp.md](docs/ucp.md). x402 on that surface
 
 ## Releases & versioning
 
-**Required reading before any version bump or GitHub Release:** [RELEASE.md](RELEASE.md).
+**Required reading before any version bump, GitHub Release, or WordPress.org publish:** [RELEASE.md](RELEASE.md).
 
+- **GitHub** is where we develop. **WordPress.org SVN** is a release snapshot for the Plugin Directory only — not a second development remote.
 - SemVer in multiple files must stay in sync (`bash bin/check-version.sh`).
 - Bump with `bash bin/bump-version.sh X.Y.Z`.
-- Publish by pushing annotated tag `vX.Y.Z` → `.github/workflows/release.yml` runs Plugin Check on the zip, then creates the GitHub Release.
+- GitHub: push annotated tag `vX.Y.Z` → `.github/workflows/release.yml` runs Plugin Check on the zip, then creates the GitHub Release.
+- WordPress.org: after that Release exists, copy the **packaged zip** into SVN `trunk/` and `tags/X.Y.Z` (see RELEASE.md). Do not paste SVN passwords into chat.
+- Canonical changelog is GitHub Releases. `readme.txt` Changelog is a link stub only (`bump-version.sh` inserts it).
 
 ## Local E2E
 
@@ -28,5 +31,6 @@ bin/             seed, phpunit, package, version helpers
 docs/            architecture, e2e, merchant, testing, ucp
 docs/prompts/    local Cursor/agent prompts (gitignored; not shipped)
 tests/           PHP / JS / Playwright
-RELEASE.md       release process (humans + agents)
+wporg-assets/    Plugin Directory icon + screenshots (SVN `assets/`, not the zip)
+RELEASE.md       GitHub + WordPress.org SVN release process
 ```

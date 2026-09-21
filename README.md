@@ -27,7 +27,7 @@ This is a gateway extension — not a full storefront. Catalog, cart, customers,
 | [**E2E environment**](docs/e2e.md) | Ready-to-go seed + ngrok + programmatic / MetaMask pay |
 | [**UCP for agents**](docs/ucp.md) | Discovery, catalog, cart, checkout, order, x402 402-at-complete ([ucp-x402-binding](https://github.com/AxLabs/ucp-x402-binding)) |
 | [Architecture](docs/architecture.md) | Payment flow, settlement lock, ngrok upstream_auth, reconcile |
-| [**Releases**](RELEASE.md) | SemVer, tagging, GitHub Releases, agent checklist |
+| [**Releases**](RELEASE.md) | SemVer, GitHub Releases, WordPress.org SVN publish |
 | [Merchant setup](docs/merchant-setup.md) | Production checklist + agent buy sketch |
 | [Testing](docs/testing.md) | Unit, live CP, E2E commands |
 
@@ -84,21 +84,25 @@ See [docs/testing.md](docs/testing.md) and [docs/e2e.md](docs/e2e.md).
 ## Repository layout
 
 ```text
-plugin/     WordPress plugin (gateway, REST, pay page, blocks)
-bin/        seed-wp-env.sh, phpunit, package, version helpers
-docs/       context, local-dev, architecture, merchant, testing
-tests/      PHP / JS / Playwright / programmatic pay
-RELEASE.md  versioning + GitHub release process
-AGENTS.md   short agent entrypoint
+plugin/        WordPress plugin (gateway, REST, pay page, blocks)
+bin/           seed-wp-env.sh, phpunit, package, version helpers
+docs/          context, local-dev, architecture, merchant, testing
+tests/         PHP / JS / Playwright / programmatic pay
+wporg-assets/  WordPress.org Directory icon + screenshots
+RELEASE.md     versioning, GitHub Releases, WordPress.org SVN
+AGENTS.md      short agent entrypoint
 ```
 
 ## Releases
 
-SemVer + tagged GitHub Releases (plugin zip attached). See **[RELEASE.md](RELEASE.md)**.
+Development is **this GitHub repo**. WordPress.org SVN is updated only when we publish a directory release.
+
+SemVer + annotated git tags + GitHub Releases (plugin zip attached), then a copy of that zip into SVN `trunk/` + `tags/X.Y.Z`. Directory: [wordpress.org/plugins/ax402-for-woocommerce](https://wordpress.org/plugins/ax402-for-woocommerce/). Full process: **[RELEASE.md](RELEASE.md)**.
 
 ```bash
 bash bin/check-version.sh
 bash bin/bump-version.sh 0.2.0   # then commit, tag v0.2.0, push tag
+# after the GitHub Release exists: publish the zip to WordPress.org SVN (RELEASE.md)
 ```
 
 ## Security

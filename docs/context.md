@@ -88,7 +88,7 @@ Detailed sequence, settlement lock, ngrok, and reconcile: [architecture.md](arch
 - [E2E environment](e2e.md) — ready-to-go seed + ngrok + programmatic / MetaMask pay (`npm run env:e2e`)
 - [Architecture](architecture.md) — components and flows
 - [UCP for agents](ucp.md) — opt-in shopping + x402 complete ([ucp-x402-binding](https://github.com/AxLabs/ucp-x402-binding))
-- [Releases & versioning](../RELEASE.md) — SemVer, tags, GitHub Releases (agents: read before bumping)
+- [Releases & versioning](../RELEASE.md) — SemVer, GitHub Releases, WordPress.org SVN (agents: read before bumping or directory publish)
 - [Merchant setup](merchant-setup.md) — production-oriented checklist
 - [Testing](testing.md) — unit, live control plane, E2E commands
 - [AGENTS.md](../AGENTS.md) — short agent entrypoint
