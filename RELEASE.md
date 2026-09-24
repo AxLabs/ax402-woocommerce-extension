@@ -226,20 +226,20 @@ Do this **in GitHub first**, then copy into the SVN working copy (example `~/svn
 
 | Change | GitHub | SVN | New version? |
 |---|---|---|---|
-| Icon, screenshots (banner later) | `wporg-assets/` (not `plugin/assets/`) | top-level `assets/` | No |
+| Icon, screenshots, banner | `wporg-assets/` (not `plugin/assets/`) | top-level `assets/` | No |
 | Description, FAQ, screenshot captions, install copy | `plugin/readme.txt` | `trunk/readme.txt` **and** `tags/<stable>/readme.txt` | No |
 | Plugin PHP / JS / `Version:` | as usual | new `tags/X.Y.Z` after a GitHub Release | **Yes** |
 
 `plugin/assets/` is runtime CSS/JS shipped in the zip. Directory banners/icons/screenshots never go there.
 
 ```bash
-# Artwork (from this repo). Banner files are optional — skip until we have a final banner.
-cp wporg-assets/icon-*.png wporg-assets/screenshot-*.png \
+# Artwork (from this repo)
+cp wporg-assets/icon-*.png wporg-assets/banner-*.png wporg-assets/screenshot-*.png \
   ~/svn/ax402-for-woocommerce/assets/
 cd ~/svn/ax402-for-woocommerce/assets
 svn add --force .
 svn propset svn:mime-type image/png *.png
-svn ci -m "Directory icon and screenshots" --username axlabs
+svn ci -m "Directory icon, banner, and screenshots" --username axlabs
 
 # Listing copy for the current Stable tag (example 0.4.3) — no PHP changes
 cp plugin/readme.txt ~/svn/ax402-for-woocommerce/trunk/readme.txt
@@ -254,9 +254,9 @@ Let the user type the SVN password in their terminal. Directory/CDN cache can ta
 
 Names in SVN `assets/` (and in git `wporg-assets/`):
 
-* `icon-128x128.png`, `icon-256x256.png` — ship these
-* `screenshot-1.png` … matching `== Screenshots ==` in `readme.txt` — ship these
-* `banner-772x250.png`, `banner-1544x500.png` — **optional**. WordPress.org shows a plain header until we add them. Do not upload a placeholder; wait for a real banner.
+* `icon-128x128.png`, `icon-256x256.png`
+* `screenshot-1.png` … matching `== Screenshots ==` in `readme.txt`
+* `banner-772x250.png`, `banner-1544x500.png` — official **green** header. WordPress.org has **no** dark-mode banner filename; ink/cream masters live in `wporg-assets/src/` only (not SVN). Optional later: `banner-*-rtl.png` for RTL locales.
 
 Set `svn:mime-type` `image/png` (or `image/jpeg`) so the directory does not force-download them. Handbook: [plugin assets](https://developer.wordpress.org/plugins/wordpress-org/plugin-assets/).
 
